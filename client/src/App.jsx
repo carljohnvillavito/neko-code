@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import axios from 'axios';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
 import { Chatbox } from './components/Chatbox';
+import { BottomNavbar } from './components/BottomNavbar'; // Import new component
 import { parseAIResponse } from './utils/parseAIResponse';
-import { Cat, Code, Eye, BotMessageSquare, AlertTriangle } from 'lucide-react';
+import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban } from 'lucide-react';
 
-// Use environment variable for the API URL. 
-// It will fall back to localhost for local development.
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+// Build the full API URL from the host provided by Render's env var.
+const API_HOST = import.meta.env.VITE_API_HOST;
+const API_URL = API_HOST ? `https://${API_HOST}` : 'http://localhost:5001';
 
 const initialFiles = {
   'index.html': `<!DOCTYPE html>
@@ -46,6 +47,7 @@ function App() {
   const [aiLogs, setAiLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [mobileView, setMobileView] = useState('editor'); // State for mobile view
 
   const handleFileContentChange = (fileName, newContent) => {
     setProjectFiles(prevFiles => ({
@@ -74,7 +76,7 @@ function App() {
             logMessage = `AI created file: ${target}`;
         }
         updatedFiles[target] = content;
-        setActiveFile(target); // Switch to the new file
+        setActiveFile(target);
       } else if (perform.toUpperCase() === 'UPDATE') {
         if (!updatedFiles.hasOwnProperty(target)) {
           logMessage = `AI tried to UPDATE non-existent file: ${target}. Creating it instead.`;
@@ -87,8 +89,6 @@ function App() {
             logMessage = `AI tried to DELETE non-existent file: ${target}.`;
         } else {
             delete updatedFiles[target];
-            logMessage = `AI deleted file: ${target}`;
-            // If the deleted file was active, switch to another file
             if (activeFile === target) {
               const remainingFiles = Object.keys(updatedFiles);
               setActiveFile(remainingFiles.length > 0 ? remainingFiles[0] : null);
@@ -131,7 +131,6 @@ Based on the user request, analyze the project structure and the active file, th
     const fullPrompt = constructPrompt(prompt);
 
     try {
-      // Use the API_URL variable for the request
       const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
       const aiOutput = response.data.output;
       
@@ -147,10 +146,70 @@ Based on the user request, analyze the project structure and the active file, th
       setIsLoading(false);
     }
   };
+  
+  const handleSelectFile = (file) => {
+    setActiveFile(file);
+    setMobileView('editor'); // Switch to editor view on file selection
+  }
+
+  // Individual pane components for better reuse
+  const EditorPane = () => (
+    <div className="bg-gray-900 flex flex-col h-full">
+      <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
+        <Code size={18} className="text-cyan-400" />
+        <h2 className="font-bold">Editor: {activeFile}</h2>
+      </div>
+      <div className="flex-grow overflow-auto">
+        {activeFile ? (
+          <Editor fileContent={projectFiles[activeFile]} onChange={(c) => handleFileContentChange(activeFile, c)} />
+        ) : (
+          <div className="p-4 text-gray-500">Select a file to start editing.</div>
+        )}
+      </div>
+    </div>
+  );
+
+  const PreviewPane = () => (
+    <div className="bg-gray-900 flex flex-col h-full">
+      <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
+        <Eye size={18} className="text-lime-400" />
+        <h2 className="font-bold">Live Preview</h2>
+      </div>
+      <div className="flex-grow bg-white">
+        <Preview htmlContent={projectFiles['index.html'] || ''} />
+      </div>
+    </div>
+  );
+
+  const AiPane = () => (
+     <div className="h-full flex flex-col bg-gray-900">
+       <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
+          <BotMessageSquare size={18} className="text-pink-400"/>
+          <h2 className="font-bold">AI Assistant (Neko)</h2>
+       </div>
+       {error && (
+          <div className="bg-red-500/20 text-red-300 p-2 flex items-center gap-2">
+              <AlertTriangle size={16} />
+              <span>{error}</span>
+          </div>
+      )}
+      <div className="flex-grow flex flex-col-reverse p-4 overflow-y-auto gap-2">
+          {aiLogs.map((log, index) => (
+              <p key={index} className={`text-sm ${log.startsWith('Error:') ? 'text-red-400' : 'text-gray-400'}`}>{log}</p>
+          ))}
+      </div>
+      <Chatbox onAskAI={handleAskAI} isLoading={isLoading} />
+    </div>
+  );
+  
+  const FilesPane = () => (
+    <div className="bg-gray-900 flex flex-col h-full p-2">
+        <Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={handleSelectFile} />
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-mono">
-      {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 p-2 flex items-center justify-between shadow-md z-20">
         <div className="flex items-center gap-3">
           <Cat className="h-8 w-8 text-pink-400" />
@@ -158,67 +217,31 @@ Based on the user request, analyze the project structure and the active file, th
         </div>
       </header>
       
-      {/* Main Content */}
-      <div className="flex-grow flex flex-col md:flex-row overflow-hidden">
-        {/* Sidebar */}
-        <div className="w-full md:w-48 lg:w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2">
+      {/* --- DESKTOP LAYOUT --- */}
+      <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
+        <div className="w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2">
            <Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={setActiveFile} />
         </div>
-
-        {/* Editor & Preview Panes */}
         <div className="flex-grow flex flex-col overflow-hidden">
           <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-px bg-gray-700">
-            {/* Editor Pane */}
-            <div className="bg-gray-900 flex flex-col">
-              <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
-                <Code size={18} className="text-cyan-400" />
-                <h2 className="font-bold">Editor: {activeFile}</h2>
-              </div>
-              <div className="flex-grow overflow-auto">
-                {activeFile ? (
-                  <Editor
-                    fileContent={projectFiles[activeFile]}
-                    onChange={(newContent) => handleFileContentChange(activeFile, newContent)}
-                  />
-                ) : (
-                  <div className="p-4 text-gray-500">Select a file to start editing or ask the AI to create one.</div>
-                )}
-              </div>
-            </div>
-
-            {/* Preview Pane */}
-            <div className="bg-gray-900 flex flex-col">
-              <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
-                <Eye size={18} className="text-lime-400" />
-                <h2 className="font-bold">Live Preview</h2>
-              </div>
-              <div className="flex-grow bg-white">
-                <Preview htmlContent={projectFiles['index.html'] || ''} />
-              </div>
-            </div>
+            <EditorPane />
+            <PreviewPane />
           </div>
-          
-          {/* AI Chat & Logs Pane */}
-          <div className="h-1/3 md:h-1/4 lg:h-1/3 flex flex-col bg-gray-800/50 border-t border-gray-700">
-             <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
-                <BotMessageSquare size={18} className="text-pink-400"/>
-                <h2 className="font-bold">AI Assistant (Neko)</h2>
-             </div>
-             {error && (
-                <div className="bg-red-500/20 text-red-300 p-2 flex items-center gap-2">
-                    <AlertTriangle size={16} />
-                    <span>{error}</span>
-                </div>
-            )}
-            <div className="flex-grow flex flex-col-reverse p-4 overflow-y-auto gap-2">
-                {aiLogs.map((log, index) => (
-                    <p key={index} className={`text-sm ${log.startsWith('Error:') ? 'text-red-400' : 'text-gray-400'}`}>{log}</p>
-                ))}
-            </div>
-            <Chatbox onAskAI={handleAskAI} isLoading={isLoading} />
+          <div className="h-1/3 flex flex-col bg-gray-800/50 border-t border-gray-700">
+             <AiPane />
           </div>
         </div>
       </div>
+      
+      {/* --- MOBILE LAYOUT --- */}
+      <main className="flex-grow md:hidden overflow-y-auto pb-16">
+        {mobileView === 'editor' && <EditorPane />}
+        {mobileView === 'preview' && <PreviewPane />}
+        {mobileView === 'files' && <FilesPane />}
+        {mobileView === 'ai' && <AiPane />}
+      </main>
+      
+      <BottomNavbar activeView={mobileView} setActiveView={setMobileView} />
     </div>
   );
 }
