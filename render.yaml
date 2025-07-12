@@ -24,7 +24,7 @@ services:
         fromService:
           type: web
           name: tinidor-code-api
-          property: url # Automatically gets the backend's URL
+          property: https://tinidor-code-api.onrender.com
     routes:
       - type: rewrite
         source: /*
