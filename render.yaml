@@ -1,0 +1,31 @@
+services:
+  # The Backend (Web Service)
+  - type: web
+    name: neko-editor-backend
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false # Keep your API key secret
+
+  # The Frontend (Static Site)
+  - type: web
+    name: neko-editor-client
+    runtime: static
+    rootDir: client
+    plan: free
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: neko-editor-backend
+          property: url # Automatically gets the backend's URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
