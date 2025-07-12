@@ -9,12 +9,7 @@ import { parseAIResponse } from './utils/parseAIResponse';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban } from 'lucide-react';
 
 const API_HOST = import.meta.env.VITE_API_HOST;
-const API_URL = API_HOST ? `https://${API_HOST}` : 'http://localhost:5001';
-
-// --- DEBUGGING STEP ---
-// This will show us in the browser console which API URL is being used.
-// If this logs "http://localhost:5001" on your live site, the env var is the problem.
-console.log("Attempting to connect to API at:", API_URL);
+const API_URL = API_HOST ? `https://${API_HOST}`;
 
 const initialFiles = {
   'index.html': `<!DOCTYPE html>
@@ -82,7 +77,7 @@ const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (
    <div className="h-full flex flex-col bg-gray-900">
      <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0">
         <BotMessageSquare size={18} className="text-pink-400"/>
-        <h2 className="font-bold">AI Assistant (Neko)</h2>
+        <h2 className="font-bold">AI-Agent</h2>
      </div>
      {error && (
         <div className="bg-red-500/20 text-red-300 p-2 flex items-center gap-2">
@@ -91,9 +86,24 @@ const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (
         </div>
     )}
     <div className="flex-grow flex flex-col-reverse p-4 overflow-y-auto gap-2">
-        {aiLogs.map((log, index) => (
-            <p key={index} className={`text-sm ${log.startsWith('Error:') ? 'text-red-400' : 'text-gray-400'}`}>{log}</p>
-        ))}
+        {aiLogs.map((log, index) => {
+          const isAgentPurr = log.startsWith('Agent-PURR:');
+          const isUser = log.startsWith('User:');
+          const isError = log.startsWith('Error:');
+          const isAction = log.startsWith('Action:');
+
+          const style = isAgentPurr
+            ? 'text-pink-400'
+            : isUser
+            ? 'text-gray-400'
+            : isError
+            ? 'text-red-400'
+            : isAction
+            ? 'text-cyan-400'
+            : 'text-gray-500';
+
+          return <p key={index} className={`text-sm ${style}`}>{log}</p>
+        })}
     </div>
     <div className="flex-shrink-0">
         <Chatbox onAskAI={onAskAI} isLoading={isLoading} />
@@ -129,32 +139,39 @@ function App() {
     const { perform, target, content, method } = action;
   
     if (!perform || !target) {
-        throw new Error("Invalid AI response: 'PERFORM' and 'TARGET' are required.");
+        setError("Invalid AI response from server.");
+        return;
     }
-  
-    let logMessage = `AI message: "${method}"`;
-    setAiLogs(prev => [logMessage, ...prev]);
 
-    setProjectFiles(prevFiles => {
-      const updatedFiles = { ...prevFiles };
-  
-      if (perform.toUpperCase() === 'ADD') {
-        updatedFiles[target] = content;
-        setActiveFile(target);
-      } else if (perform.toUpperCase() === 'UPDATE') {
-        updatedFiles[target] = content;
-      } else if (perform.toUpperCase() === 'DELETE') {
-        delete updatedFiles[target];
+    // --- 1. Calculate all state changes ---
+    let actionLog = '';
+    const conversationalLog = `Agent-PURR: "${method}"`;
+    const newProjectFiles = { ...projectFiles };
+    let newActiveFile = activeFile;
+
+    if (perform.toUpperCase() === 'ADD') {
+        actionLog = `Action: Created file '${target}'.`;
+        newProjectFiles[target] = content;
+        newActiveFile = target;
+    } else if (perform.toUpperCase() === 'UPDATE') {
+        actionLog = `Action: Updated file '${target}'.`;
+        newProjectFiles[target] = content;
+    } else if (perform.toUpperCase() === 'DELETE') {
+        actionLog = `Action: Deleted file '${target}'.`;
+        delete newProjectFiles[target];
         if (activeFile === target) {
-          const remainingFiles = Object.keys(updatedFiles);
-          setActiveFile(remainingFiles.length > 0 ? remainingFiles[0] : null);
+            const remainingFiles = Object.keys(newProjectFiles);
+            newActiveFile = remainingFiles.length > 0 ? remainingFiles[0] : null;
         }
-      } else {
-        throw new Error(`Invalid AI action: PERFORM must be ADD, UPDATE, or DELETE.`);
-      }
-      setAiLogs(prev => [logMessage, ...prev]);
-      return updatedFiles;
-    });
+    } else {
+        setError(`Invalid AI action received: ${perform}`);
+        return;
+    }
+
+    // --- 2. Apply all state changes at once ---
+    setProjectFiles(newProjectFiles);
+    setActiveFile(newActiveFile);
+    setAiLogs(prev => [actionLog, conversationalLog, ...prev]);
   };
 
   const constructPrompt = (userInput) => {
@@ -183,10 +200,8 @@ Based on the user request, analyze the project structure and the active file, th
       const parsedAction = parseAIResponse(aiOutput);
       applyAIAction(parsedAction);
     } catch (err) {
-      // --- ENHANCED ERROR LOGGING ---
       if (err.response) {
         console.error("API Error Response:", err.response.data);
-        console.error("Status:", err.response.status);
       } else if (err.request) {
         console.error("API No Response:", err.request);
       } else {
