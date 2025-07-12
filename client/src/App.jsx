@@ -173,6 +173,7 @@ Based on the user request, analyze the project structure and the active file, th
     setAiLogs(prev => [`User: "${prompt}"`, ...prev]);
     const fullPrompt = constructPrompt(prompt);
     try {
+      // CORRECTED: The URL now uses '/api/ask-ai' with a dash.
       const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
       const aiOutput = response.data.output;
       const parsedAction = parseAIResponse(aiOutput);
@@ -192,27 +193,20 @@ Based on the user request, analyze the project structure and the active file, th
     setMobileView('editor');
   };
 
-  // Memoized function to create a self-contained HTML for the preview iframe
   const previewContent = useMemo(() => {
     const html = projectFiles['index.html'] || '<h1>No index.html file to display.</h1>';
     const css = projectFiles['style.css'] || '';
     const js = projectFiles['script.js'] || '';
-
-    // Replace the external stylesheet link with an inline <style> tag
     const withCss = html.replace(
       /<link[^>]*?href=["']style\.css["'][^>]*?>/,
       `<style>${css}</style>`
     );
-
-    // Replace the external script link with an inline <script> tag
     const withJs = withCss.replace(
       /<script[^>]*?src=["']script\.js["'][^>]*?><\/script>/,
       `<script>${js}</script>`
     );
-
     return withJs;
   }, [projectFiles]);
-
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-mono">
@@ -223,7 +217,6 @@ Based on the user request, analyze the project structure and the active file, th
         </div>
       </header>
       
-      {/* --- DESKTOP LAYOUT --- */}
       <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
         <div className="w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2">
            <Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={setActiveFile} />
@@ -239,7 +232,6 @@ Based on the user request, analyze the project structure and the active file, th
         </div>
       </div>
       
-      {/* --- MOBILE LAYOUT --- */}
       <main className="flex-grow md:hidden overflow-hidden pb-16">
         {mobileView === 'editor' && <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />}
         {mobileView === 'preview' && <PreviewPane htmlContent={previewContent} />}
