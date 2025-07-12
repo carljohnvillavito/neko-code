@@ -12,7 +12,7 @@ services:
         sync: false # Keep your API key secret
 
   # The Frontend (Static Site)
-  - type: static
+  - type: static_site
     name: tinidor-code-ui
     runtime: static
     rootDir: client
