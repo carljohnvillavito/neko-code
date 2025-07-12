@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import axios from 'axios';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
@@ -41,9 +41,6 @@ h1 {
 };
 
 // --- STABLE PANE COMPONENTS ---
-// By defining these outside the App component, they are not re-created on every render.
-// This prevents the editor from losing focus and the keyboard from closing.
-
 const EditorPane = ({ activeFile, fileContent, onChange }) => (
   <div className="bg-gray-900 flex flex-col h-full">
     <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0">
@@ -116,7 +113,6 @@ function App() {
   const [mobileView, setMobileView] = useState('editor');
 
   const handleFileContentChange = (newContent) => {
-    // Check if newContent is defined to avoid errors
     if (newContent === undefined) return;
     setProjectFiles(prevFiles => ({
       ...prevFiles,
@@ -151,7 +147,6 @@ function App() {
       } else {
         throw new Error(`Invalid AI action: PERFORM must be ADD, UPDATE, or DELETE.`);
       }
-
       setAiLogs(prev => [logMessage, ...prev]);
       return updatedFiles;
     });
@@ -160,7 +155,6 @@ function App() {
   const constructPrompt = (userInput) => {
     const fileList = Object.keys(projectFiles).join(', ');
     const activeFileContent = projectFiles[activeFile] || "No file is currently active.";
-
     return `
 User Request: "${userInput}"
 Current Project File Structure: [${fileList}]
@@ -196,7 +190,29 @@ Based on the user request, analyze the project structure and the active file, th
   const handleSelectFile = (file) => {
     setActiveFile(file);
     setMobileView('editor');
-  }
+  };
+
+  // Memoized function to create a self-contained HTML for the preview iframe
+  const previewContent = useMemo(() => {
+    const html = projectFiles['index.html'] || '<h1>No index.html file to display.</h1>';
+    const css = projectFiles['style.css'] || '';
+    const js = projectFiles['script.js'] || '';
+
+    // Replace the external stylesheet link with an inline <style> tag
+    const withCss = html.replace(
+      /<link[^>]*?href=["']style\.css["'][^>]*?>/,
+      `<style>${css}</style>`
+    );
+
+    // Replace the external script link with an inline <script> tag
+    const withJs = withCss.replace(
+      /<script[^>]*?src=["']script\.js["'][^>]*?><\/script>/,
+      `<script>${js}</script>`
+    );
+
+    return withJs;
+  }, [projectFiles]);
+
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-mono">
@@ -215,7 +231,7 @@ Based on the user request, analyze the project structure and the active file, th
         <div className="flex-grow flex flex-col overflow-hidden">
           <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-px bg-gray-700">
             <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />
-            <PreviewPane htmlContent={projectFiles['index.html']} />
+            <PreviewPane htmlContent={previewContent} />
           </div>
           <div className="h-1/3 flex flex-col bg-gray-800/50 border-t border-gray-700">
              <AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} />
@@ -226,7 +242,7 @@ Based on the user request, analyze the project structure and the active file, th
       {/* --- MOBILE LAYOUT --- */}
       <main className="flex-grow md:hidden overflow-hidden pb-16">
         {mobileView === 'editor' && <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />}
-        {mobileView === 'preview' && <PreviewPane htmlContent={projectFiles['index.html']} />}
+        {mobileView === 'preview' && <PreviewPane htmlContent={previewContent} />}
         {mobileView === 'files' && <FilesPane files={projectFiles} activeFile={activeFile} onSelectFile={handleSelectFile} />}
         {mobileView === 'ai' && <AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} />}
       </main>
