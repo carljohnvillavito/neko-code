@@ -7,6 +7,10 @@ import { Chatbox } from './components/Chatbox';
 import { parseAIResponse } from './utils/parseAIResponse';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle } from 'lucide-react';
 
+// Use environment variable for the API URL. 
+// It will fall back to localhost for local development.
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+
 const initialFiles = {
   'index.html': `<!DOCTYPE html>
 <html>
@@ -127,7 +131,8 @@ Based on the user request, analyze the project structure and the active file, th
     const fullPrompt = constructPrompt(prompt);
 
     try {
-      const response = await axios.post('http://localhost:5001/api/ask-ai', { prompt: fullPrompt });
+      // Use the API_URL variable for the request
+      const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
       const aiOutput = response.data.output;
       
       const parsedAction = parseAIResponse(aiOutput);
