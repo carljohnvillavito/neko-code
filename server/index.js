@@ -15,6 +15,10 @@ app.use(express.json());
 // Routes
 app.use('/api', aiRoutes);
 
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'This API is purring.' });
+});
+
 app.listen(port, () => {
   console.log(`🚀 Server running on http://localhost:${port}`);
 });
