@@ -6,7 +6,7 @@ export const BottomNavbar = ({ activeView, setActiveView }) => {
     { id: 'editor', icon: Code, label: 'Editor' },
     { id: 'preview', icon: Eye, label: 'Preview' },
     { id: 'files', icon: FolderKanban, label: 'Files' },
-    { id: 'ai', icon: BotMessageSquare, label: 'AI' },
+    { id: 'ai', icon: BotMessageSquare, label: 'AI-Agent' }, // Changed label
   ];
 
   return (
