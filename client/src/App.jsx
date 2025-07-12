@@ -40,6 +40,73 @@ h1 {
   'script.js': `console.log("Welcome to the AI Code Editor!");`,
 };
 
+// --- STABLE PANE COMPONENTS ---
+// By defining these outside the App component, they are not re-created on every render.
+// This prevents the editor from losing focus and the keyboard from closing.
+
+const EditorPane = ({ activeFile, fileContent, onChange }) => (
+  <div className="bg-gray-900 flex flex-col h-full">
+    <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0">
+      <Code size={18} className="text-cyan-400" />
+      <h2 className="font-bold">Editor: {activeFile}</h2>
+    </div>
+    <div className="flex-grow overflow-hidden">
+      {activeFile ? (
+        <Editor
+          activeFile={activeFile}
+          fileContent={fileContent}
+          onChange={onChange}
+        />
+      ) : (
+        <div className="p-4 text-gray-500">Select a file to start editing.</div>
+      )}
+    </div>
+  </div>
+);
+
+const PreviewPane = ({ htmlContent }) => (
+  <div className="bg-gray-900 flex flex-col h-full">
+    <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0">
+      <Eye size={18} className="text-lime-400" />
+      <h2 className="font-bold">Live Preview</h2>
+    </div>
+    <div className="flex-grow bg-white">
+      <Preview htmlContent={htmlContent} />
+    </div>
+  </div>
+);
+
+const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (
+   <div className="h-full flex flex-col bg-gray-900">
+     <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0">
+        <BotMessageSquare size={18} className="text-pink-400"/>
+        <h2 className="font-bold">AI Assistant (Neko)</h2>
+     </div>
+     {error && (
+        <div className="bg-red-500/20 text-red-300 p-2 flex items-center gap-2">
+            <AlertTriangle size={16} />
+            <span>{error}</span>
+        </div>
+    )}
+    <div className="flex-grow flex flex-col-reverse p-4 overflow-y-auto gap-2">
+        {aiLogs.map((log, index) => (
+            <p key={index} className={`text-sm ${log.startsWith('Error:') ? 'text-red-400' : 'text-gray-400'}`}>{log}</p>
+        ))}
+    </div>
+    <div className="flex-shrink-0">
+        <Chatbox onAskAI={onAskAI} isLoading={isLoading} />
+    </div>
+  </div>
+);
+
+const FilesPane = ({ files, activeFile, onSelectFile }) => (
+  <div className="bg-gray-900 flex flex-col h-full p-2">
+      <Sidebar files={files} activeFile={activeFile} onSelectFile={onSelectFile} />
+  </div>
+);
+
+
+// --- MAIN APP COMPONENT ---
 function App() {
   const [projectFiles, setProjectFiles] = useState(initialFiles);
   const [activeFile, setActiveFile] = useState('index.html');
@@ -48,8 +115,9 @@ function App() {
   const [error, setError] = useState(null);
   const [mobileView, setMobileView] = useState('editor');
 
-  const handleFileContentChange = (newContent, event) => {
-    // Monaco's onChange provides the content as the first argument
+  const handleFileContentChange = (newContent) => {
+    // Check if newContent is defined to avoid errors
+    if (newContent === undefined) return;
     setProjectFiles(prevFiles => ({
       ...prevFiles,
       [activeFile]: newContent,
@@ -70,29 +138,15 @@ function App() {
       const updatedFiles = { ...prevFiles };
   
       if (perform.toUpperCase() === 'ADD') {
-        if (updatedFiles.hasOwnProperty(target)) {
-            logMessage = `AI tried to ADD existing file: ${target}. Updating instead.`;
-        } else {
-            logMessage = `AI created file: ${target}`;
-        }
         updatedFiles[target] = content;
         setActiveFile(target);
       } else if (perform.toUpperCase() === 'UPDATE') {
-        if (!updatedFiles.hasOwnProperty(target)) {
-          logMessage = `AI tried to UPDATE non-existent file: ${target}. Creating it instead.`;
-        } else {
-          logMessage = `AI updated file: ${target}`;
-        }
         updatedFiles[target] = content;
       } else if (perform.toUpperCase() === 'DELETE') {
-        if (!updatedFiles.hasOwnProperty(target)) {
-            logMessage = `AI tried to DELETE non-existent file: ${target}.`;
-        } else {
-            delete updatedFiles[target];
-            if (activeFile === target) {
-              const remainingFiles = Object.keys(updatedFiles);
-              setActiveFile(remainingFiles.length > 0 ? remainingFiles[0] : null);
-            }
+        delete updatedFiles[target];
+        if (activeFile === target) {
+          const remainingFiles = Object.keys(updatedFiles);
+          setActiveFile(remainingFiles.length > 0 ? remainingFiles[0] : null);
         }
       } else {
         throw new Error(`Invalid AI action: PERFORM must be ADD, UPDATE, or DELETE.`);
@@ -109,38 +163,30 @@ function App() {
 
     return `
 User Request: "${userInput}"
-
 Current Project File Structure: [${fileList}]
-
 Currently Active File ('${activeFile}'):
 ---
 ${activeFileContent}
 ---
-
 Based on the user request, analyze the project structure and the active file, then generate a response in the required format to modify the project.
 `;
   };
 
   const handleAskAI = async (prompt) => {
     if (!prompt || isLoading) return;
-
     setIsLoading(true);
     setError(null);
     setAiLogs(prev => [`User: "${prompt}"`, ...prev]);
-
     const fullPrompt = constructPrompt(prompt);
-
     try {
       const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
       const aiOutput = response.data.output;
-      
       const parsedAction = parseAIResponse(aiOutput);
       applyAIAction(parsedAction);
-
     } catch (err) {
       const errorMessage = err.response?.data?.error || err.message || "An unknown error occurred.";
       console.error("Error during AI interaction:", errorMessage);
-setError(errorMessage);
+      setError(errorMessage);
       setAiLogs(prev => [`Error: ${errorMessage}`, ...prev]);
     } finally {
       setIsLoading(false);
@@ -152,94 +198,37 @@ setError(errorMessage);
     setMobileView('editor');
   }
 
-  const EditorPane = () => (
-    <div className="bg-gray-900 flex flex-col h-full">
-      <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
-        <Code size={18} className="text-cyan-400" />
-        <h2 className="font-bold">Editor: {activeFile}</h2>
-      </div>
-      <div className="flex-grow overflow-hidden"> {/* Changed overflow-auto to overflow-hidden */}
-        {activeFile ? (
-          <Editor
-            activeFile={activeFile} // Pass activeFile for language detection
-            fileContent={projectFiles[activeFile]}
-            onChange={handleFileContentChange} // Pass the updated handler
-          />
-        ) : (
-          <div className="p-4 text-gray-500">Select a file to start editing.</div>
-        )}
-      </div>
-    </div>
-  );
-
-  const PreviewPane = () => (
-    <div className="bg-gray-900 flex flex-col h-full">
-      <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
-        <Eye size={18} className="text-lime-400" />
-        <h2 className="font-bold">Live Preview</h2>
-      </div>
-      <div className="flex-grow bg-white">
-        <Preview htmlContent={projectFiles['index.html'] || ''} />
-      </div>
-    </div>
-  );
-
-  const AiPane = () => (
-     <div className="h-full flex flex-col bg-gray-900">
-       <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
-          <BotMessageSquare size={18} className="text-pink-400"/>
-          <h2 className="font-bold">AI Assistant (Neko)</h2>
-       </div>
-       {error && (
-          <div className="bg-red-500/20 text-red-300 p-2 flex items-center gap-2">
-              <AlertTriangle size={16} />
-              <span>{error}</span>
-          </div>
-      )}
-      <div className="flex-grow flex flex-col-reverse p-4 overflow-y-auto gap-2">
-          {aiLogs.map((log, index) => (
-              <p key={index} className={`text-sm ${log.startsWith('Error:') ? 'text-red-400' : 'text-gray-400'}`}>{log}</p>
-          ))}
-      </div>
-      <Chatbox onAskAI={handleAskAI} isLoading={isLoading} />
-    </div>
-  );
-  
-  const FilesPane = () => (
-    <div className="bg-gray-900 flex flex-col h-full p-2">
-        <Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={handleSelectFile} />
-    </div>
-  );
-
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-mono">
-      <header className="bg-gray-800 border-b border-gray-700 p-2 flex items-center justify-between shadow-md z-20">
+      <header className="bg-gray-800 border-b border-gray-700 p-2 flex items-center justify-between shadow-md z-20 flex-shrink-0">
         <div className="flex items-center gap-3">
           <Cat className="h-8 w-8 text-pink-400" />
           <h1 className="text-xl font-bold text-white">Neko Code Editor</h1>
         </div>
       </header>
       
+      {/* --- DESKTOP LAYOUT --- */}
       <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
         <div className="w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2">
            <Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={setActiveFile} />
         </div>
         <div className="flex-grow flex flex-col overflow-hidden">
           <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-px bg-gray-700">
-            <EditorPane />
-            <PreviewPane />
+            <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />
+            <PreviewPane htmlContent={projectFiles['index.html']} />
           </div>
           <div className="h-1/3 flex flex-col bg-gray-800/50 border-t border-gray-700">
-             <AiPane />
+             <AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} />
           </div>
         </div>
       </div>
       
-      <main className="flex-grow md:hidden overflow-y-auto pb-16">
-        {mobileView === 'editor' && <EditorPane />}
-        {mobileView === 'preview' && <PreviewPane />}
-        {mobileView === 'files' && <FilesPane />}
-        {mobileView === 'ai' && <AiPane />}
+      {/* --- MOBILE LAYOUT --- */}
+      <main className="flex-grow md:hidden overflow-hidden pb-16">
+        {mobileView === 'editor' && <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />}
+        {mobileView === 'preview' && <PreviewPane htmlContent={projectFiles['index.html']} />}
+        {mobileView === 'files' && <FilesPane files={projectFiles} activeFile={activeFile} onSelectFile={handleSelectFile} />}
+        {mobileView === 'ai' && <AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} />}
       </main>
       
       <BottomNavbar activeView={mobileView} setActiveView={setMobileView} />
