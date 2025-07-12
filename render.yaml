@@ -24,7 +24,7 @@ services:
         fromService:
           type: web
           name: tinidor-code-api
-          property: "tinidor-code-api.onrender.com"
+          property: url
     routes:
       - type: rewrite
         source: /*
