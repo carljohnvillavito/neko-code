@@ -4,11 +4,10 @@ import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
 import { Chatbox } from './components/Chatbox';
-import { BottomNavbar } from './components/BottomNavbar'; // Import new component
+import { BottomNavbar } from './components/BottomNavbar';
 import { parseAIResponse } from './utils/parseAIResponse';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban } from 'lucide-react';
 
-// Build the full API URL from the host provided by Render's env var.
 const API_HOST = import.meta.env.VITE_API_HOST;
 const API_URL = API_HOST ? `https://${API_HOST}` : 'http://localhost:5001';
 
@@ -47,12 +46,13 @@ function App() {
   const [aiLogs, setAiLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [mobileView, setMobileView] = useState('editor'); // State for mobile view
+  const [mobileView, setMobileView] = useState('editor');
 
-  const handleFileContentChange = (fileName, newContent) => {
+  const handleFileContentChange = (newContent, event) => {
+    // Monaco's onChange provides the content as the first argument
     setProjectFiles(prevFiles => ({
       ...prevFiles,
-      [fileName]: newContent,
+      [activeFile]: newContent,
     }));
   };
   
@@ -140,7 +140,7 @@ Based on the user request, analyze the project structure and the active file, th
     } catch (err) {
       const errorMessage = err.response?.data?.error || err.message || "An unknown error occurred.";
       console.error("Error during AI interaction:", errorMessage);
-      setError(errorMessage);
+setError(errorMessage);
       setAiLogs(prev => [`Error: ${errorMessage}`, ...prev]);
     } finally {
       setIsLoading(false);
@@ -149,19 +149,22 @@ Based on the user request, analyze the project structure and the active file, th
   
   const handleSelectFile = (file) => {
     setActiveFile(file);
-    setMobileView('editor'); // Switch to editor view on file selection
+    setMobileView('editor');
   }
 
-  // Individual pane components for better reuse
   const EditorPane = () => (
     <div className="bg-gray-900 flex flex-col h-full">
       <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700">
         <Code size={18} className="text-cyan-400" />
         <h2 className="font-bold">Editor: {activeFile}</h2>
       </div>
-      <div className="flex-grow overflow-auto">
+      <div className="flex-grow overflow-hidden"> {/* Changed overflow-auto to overflow-hidden */}
         {activeFile ? (
-          <Editor fileContent={projectFiles[activeFile]} onChange={(c) => handleFileContentChange(activeFile, c)} />
+          <Editor
+            activeFile={activeFile} // Pass activeFile for language detection
+            fileContent={projectFiles[activeFile]}
+            onChange={handleFileContentChange} // Pass the updated handler
+          />
         ) : (
           <div className="p-4 text-gray-500">Select a file to start editing.</div>
         )}
@@ -217,7 +220,6 @@ Based on the user request, analyze the project structure and the active file, th
         </div>
       </header>
       
-      {/* --- DESKTOP LAYOUT --- */}
       <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
         <div className="w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2">
            <Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={setActiveFile} />
@@ -233,7 +235,6 @@ Based on the user request, analyze the project structure and the active file, th
         </div>
       </div>
       
-      {/* --- MOBILE LAYOUT --- */}
       <main className="flex-grow md:hidden overflow-y-auto pb-16">
         {mobileView === 'editor' && <EditorPane />}
         {mobileView === 'preview' && <PreviewPane />}
