@@ -9,7 +9,7 @@ import { parseAIResponse } from './utils/parseAIResponse';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban } from 'lucide-react';
 
 const API_HOST = import.meta.env.VITE_API_HOST;
-const API_URL = API_HOST ? `https://${API_HOST}` : 'https://tinidor-code-api.onrender.com';
+const API_URL = API_HOST ? `https://${API_HOST}` : 'http://localhost:5001';
 
 // --- DEBUGGING STEP ---
 // This will show us in the browser console which API URL is being used.
