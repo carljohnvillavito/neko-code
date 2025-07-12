@@ -12,11 +12,10 @@ services:
         sync: false # Keep your API key secret
 
   # The Frontend (Static Site)
-  - type: web
+  - type: static
     name: tinidor-code-ui
     runtime: static
     rootDir: client
-    plan: free
     buildCommand: "npm install && npm run build"
     staticPublishPath: dist
     envVars:
