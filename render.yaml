@@ -1,7 +1,7 @@
 services:
   # The Backend (Web Service)
   - type: web
-    name: neko-editor-backend
+    name: tinidor-code-api
     runtime: node
     rootDir: server
     plan: free
@@ -13,7 +13,7 @@ services:
 
   # The Frontend (Static Site)
   - type: web
-    name: neko-editor-client
+    name: tinidor-code-ui
     runtime: static
     rootDir: client
     plan: free
@@ -23,7 +23,7 @@ services:
       - key: VITE_API_URL
         fromService:
           type: web
-          name: neko-editor-backend
+          name: tinidor-code-api
           property: url # Automatically gets the backend's URL
     routes:
       - type: rewrite
