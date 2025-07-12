@@ -9,7 +9,12 @@ import { parseAIResponse } from './utils/parseAIResponse';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban } from 'lucide-react';
 
 const API_HOST = import.meta.env.VITE_API_HOST;
-const API_URL = API_HOST ? `https://${API_HOST}` : 'http://localhost:5001';
+const API_URL = API_HOST ? `https://${API_HOST}` : 'https://tinidor-code-api.onrender.com';
+
+// --- DEBUGGING STEP ---
+// This will show us in the browser console which API URL is being used.
+// If this logs "http://localhost:5001" on your live site, the env var is the problem.
+console.log("Attempting to connect to API at:", API_URL);
 
 const initialFiles = {
   'index.html': `<!DOCTYPE html>
@@ -173,14 +178,21 @@ Based on the user request, analyze the project structure and the active file, th
     setAiLogs(prev => [`User: "${prompt}"`, ...prev]);
     const fullPrompt = constructPrompt(prompt);
     try {
-      // CORRECTED: The URL now uses '/api/ask-ai' with a dash.
       const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
       const aiOutput = response.data.output;
       const parsedAction = parseAIResponse(aiOutput);
       applyAIAction(parsedAction);
     } catch (err) {
+      // --- ENHANCED ERROR LOGGING ---
+      if (err.response) {
+        console.error("API Error Response:", err.response.data);
+        console.error("Status:", err.response.status);
+      } else if (err.request) {
+        console.error("API No Response:", err.request);
+      } else {
+        console.error('API Setup Error:', err.message);
+      }
       const errorMessage = err.response?.data?.error || err.message || "An unknown error occurred.";
-      console.error("Error during AI interaction:", errorMessage);
       setError(errorMessage);
       setAiLogs(prev => [`Error: ${errorMessage}`, ...prev]);
     } finally {
