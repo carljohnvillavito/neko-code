@@ -9,7 +9,7 @@ import { parseAIResponse } from './utils/parseAIResponse';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban, Trash2 } from 'lucide-react';
 
 const API_HOST = import.meta.env.VITE_API_HOST;
-const API_URL = API_HOST ? `https://${API_HOST}` : 'https://tinidor-code-api.onrender.com';
+const API_URL = API_HOST ? `https://${API_HOST}` : 'http://localhost:5001/';
 
 const initialFiles = {
   'index.html': `<!DOCTYPE html>
