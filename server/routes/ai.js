@@ -3,54 +3,63 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const router = express.Router();
 
-// Initialize Google Generative AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.5-pro",
-    systemInstruction: `You are a world-class web development AI agent. Your name is Neko. You MUST respond in the following structured format. You can perform multiple file operations in a single response.
+const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-pro-latest",
+    systemInstruction: `You are a world-class web development AI agent named Neko.
+1.  First, you MUST stream your conversational response, ending it with the exact separator token: <<END_OF_METHOD>>
+2.  After the separator, you MUST provide a single, final JSON block containing an array of file operations.
 
-METHOD: [Provide a short, cat-like, one-sentence response to the user's request here.]
+EXAMPLE RESPONSE:
+METHOD: Of course, purrrr. I will create those files for you, meow.<<END_OF_METHOD>>
 ACTIONS:
 \`\`\`json
 [
   {
-    "perform": "ACTION_TYPE",
-    "target": "filename.ext",
-    "content": "the full file content here..."
+    "perform": "ADD",
+    "target": "index.html",
+    "content": "<!DOCTYPE html>..."
   },
   {
-    "perform": "ACTION_TYPE_2",
-    "target": "another-file.ext",
-    "content": "the full file content for the second action..."
+    "perform": "ADD",
+    "target": "style.css",
+    "content": "body { color: hotpink; }"
   }
 ]
 \`\`\`
-
-- The ACTIONS block must contain a valid JSON array of action objects.
-- Each action object must have "perform", "target", and "content" keys.
-- "perform" can be "ADD", "UPDATE", or "DELETE".
-- For DELETE, the "content" can be an empty string.
-- Your entire response must strictly follow this format. Do not add any other text outside this structure.`,
+`,
 });
 
 router.post('/ask-ai', async (req, res) => {
-  const { prompt } = req.body;
+    const { prompt } = req.body;
+    if (!prompt) {
+        return res.status(400).json({ success: false, error: 'Prompt is required.' });
+    }
 
-  if (!prompt) {
-    return res.status(400).json({ success: false, error: 'Prompt is required.' });
-  }
+    try {
+        // Set headers for Server-Sent Events (SSE)
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders(); // Flush the headers to establish the connection
 
-  try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    
-    res.json({ success: true, output: text });
+        const result = await model.generateContentStream(prompt);
 
-  } catch (error) {
-    console.error('Error calling Gemini API:', error);
-    res.status(500).json({ success: false, error: 'Failed to get response from AI. ' + error.message });
-  }
+        for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            // SSE format: data: [your data]\n\n
+            res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
+        }
+
+        // Send an end-of-stream signal
+        res.write(`data: ${JSON.stringify({ event: 'end' })}\n\n`);
+        res.end();
+
+    } catch (error) {
+        console.error('Error during AI stream:', error);
+        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+        res.end();
+    }
 });
 
 export default router;
