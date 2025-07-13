@@ -20,7 +20,6 @@ const initialFiles = {
 // --- STABLE PANE COMPONENTS ---
 const EditorPane = ({ activeFile, fileContent, onChange }) => (<div className="bg-gray-900 flex flex-col h-full"><div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0"><Code size={18} className="text-cyan-400" /><h2 className="font-bold">Editor: {activeFile}</h2></div><div className="flex-grow overflow-hidden">{activeFile ? (<Editor activeFile={activeFile} fileContent={fileContent} onChange={onChange} />) : (<div className="p-4 text-gray-500">Select a file to start editing.</div>)}</div></div>);
 
-// -- CORRECTED PREVIEW PANE --
 const PreviewPane = ({ htmlContent, iframeRef, isDesktopView, onToggle, onRefresh, onScreenshot }) => (
   <div className="bg-gray-900 flex flex-col h-full">
     <div className="bg-gray-800 p-2 flex items-center justify-between border-b border-gray-700 flex-shrink-0">
@@ -31,8 +30,8 @@ const PreviewPane = ({ htmlContent, iframeRef, isDesktopView, onToggle, onRefres
             <button onClick={onRefresh} title="Refresh Preview" className="p-1 text-gray-400 hover:text-white transition-colors"><RefreshCw size={18} /></button>
         </div>
     </div>
-    {/* THE FIX: Using 'grid' and 'place-items-center' for robust centering. */}
-    <div className="flex-grow bg-white grid place-items-center overflow-hidden">
+    {/* This container now just centers the wrapper div from the Preview component */}
+    <div className="flex-grow bg-gray-700 grid place-items-center overflow-hidden">
       <Preview ref={iframeRef} htmlContent={htmlContent} isDesktopView={isDesktopView} />
     </div>
   </div>
@@ -140,9 +139,7 @@ function App() {
                 }
                 break;
             }
-
             buffer += decoder.decode(value, { stream: true });
-            
             let boundary = buffer.indexOf('\n\n');
             while(boundary !== -1) {
                 const message = buffer.substring(0, boundary);
