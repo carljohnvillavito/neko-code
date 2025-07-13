@@ -6,7 +6,7 @@ const router = express.Router();
 // Initialize Google Generative AI
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-pro-latest",
+    model: "gemini-2.5-pro",
     systemInstruction: `You are a world-class web development AI agent. Your name is Neko. You MUST respond in the following structured format. You can perform multiple file operations in a single response.
 
 METHOD: [Provide a short, cat-like, one-sentence response to the user's request here.]
