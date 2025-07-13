@@ -55,30 +55,18 @@ function App() {
   
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-  const applyAIActions = async (parsedResponse) => {
-    const { method, actions } = parsedResponse;
-
-    setAiLogs(prev => [{ id: Date.now(), type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
-
+  const applyAIActions = async (actions) => {
     if (!actions || actions.length === 0) {
-        setAiLogs(prev => [{ id: Date.now() + 1, type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
+        setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
         return;
     }
-    
-    const pendingLogs = actions.map(action => {
-        let verb = action.perform.toLowerCase();
-        if (verb.endsWith('e')) { verb = verb.slice(0, -1); }
-        const pendingVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ing";
-        return { id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${pendingVerb} file '${action.target}'...`};
-    });
+    const pendingLogs = actions.map(action => { let verb = action.perform.toLowerCase(); if (verb.endsWith('e')) { verb = verb.slice(0, -1); } const pendingVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ing"; return { id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${pendingVerb} file '${action.target}'...`}; });
     setAiLogs(prev => [...pendingLogs.reverse(), ...prev]);
-
     let tempActiveFile = activeFile;
     for (let i = 0; i < actions.length; i++) {
         await delay(1000);
         const action = actions[i];
         const logToUpdate = pendingLogs[i];
-        
         setProjectFiles(currentFiles => {
             const newFiles = { ...currentFiles };
             const upperPerform = action.perform.toUpperCase() === 'REPLACE' ? 'UPDATE' : action.perform.toUpperCase();
@@ -87,11 +75,9 @@ function App() {
             else if (upperPerform === 'DELETE') { delete newFiles[action.target]; if (tempActiveFile === action.target) { const r = Object.keys(newFiles); tempActiveFile = r.length > 0 ? r[0] : null; } }
             return newFiles;
         });
-
         setAiLogs(prevLogs => prevLogs.map(log => {
             if (log.id === logToUpdate.id) {
-                let verb = action.perform.toLowerCase();
-                let pastTenseVerb;
+                let verb = action.perform.toLowerCase(); let pastTenseVerb;
                 if (verb === 'add') { pastTenseVerb = 'Added'; }
                 else if (verb === 'replace' || verb === 'update') { pastTenseVerb = 'Updated'; }
                 else if (verb === 'delete') { pastTenseVerb = 'Deleted'; }
@@ -121,14 +107,9 @@ function App() {
     const fullPrompt = constructEnhancedPrompt(prompt);
     
     try {
-        const response = await fetch(`${API_URL}/api/ask-ai-stream`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: fullPrompt }),
-        });
-
+        const response = await fetch(`${API_URL}/api/ask-ai-stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt }), });
+        
         clearInterval(thinkingInterval);
-        setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
 
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
@@ -139,22 +120,25 @@ function App() {
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-                const parsed = parseAIResponse(fullResponseText);
-                await applyAIActions(parsed);
-                break;
-            }
+            if (done) break;
             const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
+            const lines = chunk.split('\n\n');
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
-                    const data = JSON.parse(line.substring(6));
-                    if (data.text) {
-                        fullResponseText += data.text;
-                    }
+                    try {
+                        const data = JSON.parse(line.substring(6));
+                        if(data.text) { fullResponseText += data.text; }
+                    } catch(e) { /* Ignore malformed JSON chunks */ }
                 }
             }
         }
+        
+        const parsed = parseAIResponse(fullResponseText);
+        
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
+        
+        await applyAIActions(parsed.actions);
+
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
