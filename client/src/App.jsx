@@ -46,7 +46,7 @@ function App() {
   const [error, setError] = useState(null);
   const [mobileView, setMobileView] = useState('editor');
   const [isPreviewDesktop, setIsPreviewDesktop] = useState(false);
-  const [lastValidMessage, setLastValidMessage] = useState(''); // Buffer for the last good message
+  const [lastValidMessage, setLastValidMessage] = useState('');
   const iframeRef = useRef(null);
   
   useEffect(() => { localStorage.setItem('neko-project-files', JSON.stringify(projectFiles)); }, [projectFiles]);
@@ -97,48 +97,32 @@ function App() {
     if (!prompt || isLoading) return;
     setIsLoading(true); setError(null);
     setAiLogs(prev => [{ id: Date.now(), type: 'user', content: `User: "${prompt}"` }, ...prev]);
-    
     const agentLogId = Date.now() + 1;
     setAiLogs(prev => [{ id: agentLogId, type: 'agent-purr', content: 'Agent-PURR: Thinking...' }, ...prev]);
-    
-    let thinkingInterval = setInterval(() => {
-        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log));
-    }, 500);
-
+    let thinkingInterval = setInterval(() => { setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log)); }, 500);
     const fullPrompt = constructEnhancedPrompt(prompt);
-    
     try {
         const response = await fetch(`${API_URL}/api/ask-ai-stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt }), });
-        
         clearInterval(thinkingInterval);
-
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
-
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullResponseText = '';
-
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             fullResponseText += decoder.decode(value, { stream: true }).replace(/data: /g, '').trim();
         }
-        
         const parsed = parseAIResponse(fullResponseText);
         let finalMessage = parsed.method;
-
-        // THE FIX: Check for the fallback message and use the buffered message instead.
         if (finalMessage === "Neko didn't provide a message." && lastValidMessage) {
             finalMessage = lastValidMessage;
         } else {
-            setLastValidMessage(finalMessage); // Buffer the new valid message
+            setLastValidMessage(finalMessage);
         }
-        
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${finalMessage}"` } : log));
-        
         await applyAIActions(parsed.actions);
-
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
