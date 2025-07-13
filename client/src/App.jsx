@@ -1,15 +1,16 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import axios from 'axios';
+import html2canvas from 'html2canvas';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
 import { Chatbox } from './components/Chatbox';
 import { BottomNavbar } from './components/BottomNavbar';
 import { parseAIResponse } from './utils/parseAIResponse';
-import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban, Trash2 } from 'lucide-react';
+import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban, Trash2, Smartphone, Laptop, Camera, RefreshCw } from 'lucide-react';
 
 const API_HOST = import.meta.env.VITE_API_HOST;
-const API_URL = API_HOST ? `https://${API_HOST}.onrender.com` : 'http://localhost:5001/';
+const API_URL = API_HOST ? `https://${API_HOST}.onrender.com` : 'http://localhost:5001';
 
 const initialFiles = {
   'index.html': `<!DOCTYPE html>
@@ -61,14 +62,27 @@ const EditorPane = ({ activeFile, fileContent, onChange }) => (
   </div>
 );
 
-const PreviewPane = ({ htmlContent }) => (
+const PreviewPane = ({ htmlContent, iframeRef, isDesktopView, onToggle, onRefresh, onScreenshot }) => (
   <div className="bg-gray-900 flex flex-col h-full">
-    <div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0">
-      <Eye size={18} className="text-lime-400" />
-      <h2 className="font-bold">Live Preview</h2>
+    <div className="bg-gray-800 p-2 flex items-center justify-between border-b border-gray-700 flex-shrink-0">
+        <div className="flex items-center gap-2">
+            <Eye size={18} className="text-lime-400" />
+            <h2 className="font-bold">Live Preview</h2>
+        </div>
+        <div className="flex items-center gap-2">
+            <button onClick={onToggle} title={isDesktopView ? "Switch to Mobile View" : "Switch to Desktop View"} className="p-1 text-gray-400 hover:text-white transition-colors">
+                {isDesktopView ? <Smartphone size={18} /> : <Laptop size={18} />}
+            </button>
+            <button onClick={onScreenshot} title="Take Screenshot" className="p-1 text-gray-400 hover:text-white transition-colors">
+                <Camera size={18} />
+            </button>
+            <button onClick={onRefresh} title="Refresh Preview" className="p-1 text-gray-400 hover:text-white transition-colors">
+                <RefreshCw size={18} />
+            </button>
+        </div>
     </div>
-    <div className="flex-grow bg-white">
-      <Preview htmlContent={htmlContent} />
+    <div className="flex-grow bg-white relative overflow-hidden">
+      <Preview ref={iframeRef} htmlContent={htmlContent} isDesktopView={isDesktopView} />
     </div>
   </div>
 );
@@ -92,16 +106,7 @@ const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (
           const isError = log.startsWith('Error:');
           const isAction = log.startsWith('Action:');
 
-          const style = isAgentPurr
-            ? 'text-pink-400'
-            : isUser
-            ? 'text-gray-400'
-            : isError
-            ? 'text-red-400'
-            : isAction
-            ? 'text-cyan-400'
-            : 'text-gray-500';
-
+          const style = isAgentPurr ? 'text-pink-400' : isUser ? 'text-gray-400' : isError ? 'text-red-400' : isAction ? 'text-cyan-400' : 'text-gray-500';
           return <p key={index} className={`text-sm ${style}`}>{log}</p>
         })}
     </div>
@@ -123,13 +128,11 @@ function App() {
   const [projectFiles, setProjectFiles] = useState(() => {
     try {
       const savedFiles = localStorage.getItem('neko-project-files');
-      if (savedFiles) {
-        return JSON.parse(savedFiles);
-      }
+      return savedFiles ? JSON.parse(savedFiles) : initialFiles;
     } catch (error) {
       console.error("Could not load files from localStorage", error);
+      return initialFiles;
     }
-    return initialFiles;
   });
 
   const [activeFile, setActiveFile] = useState('index.html');
@@ -137,8 +140,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mobileView, setMobileView] = useState('editor');
+  const [isPreviewDesktop, setIsPreviewDesktop] = useState(false);
+  const iframeRef = useRef(null);
   
-  // Effect to save files to localStorage whenever they change
   useEffect(() => {
     try {
       localStorage.setItem('neko-project-files', JSON.stringify(projectFiles));
@@ -149,43 +153,27 @@ function App() {
 
   const handleFileContentChange = (newContent) => {
     if (newContent === undefined) return;
-    setProjectFiles(prevFiles => ({
-      ...prevFiles,
-      [activeFile]: newContent,
-    }));
+    setProjectFiles(prevFiles => ({...prevFiles, [activeFile]: newContent}));
   };
   
   const applyAIActions = (parsedResponse) => {
     const { method, actions } = parsedResponse;
-  
     if (!actions || actions.length === 0) {
         setError("AI did not provide any actions to perform.");
         setAiLogs(prev => [`Agent-PURR: "${method}"`, ...prev]);
         return;
     }
-
     const conversationalLog = `Agent-PURR: "${method}"`;
     const newLogs = [conversationalLog];
-    
     setProjectFiles(currentFiles => {
       const newProjectFiles = { ...currentFiles };
       let newActiveFile = activeFile;
-      
       for (const action of actions) {
         const { perform, target, content } = action;
-        if (!perform || !target) {
-          newLogs.push(`Error: Invalid action object received from AI.`);
-          continue;
-        }
-        
+        if (!perform || !target) { newLogs.push(`Error: Invalid action object received from AI.`); continue; }
         const upperPerform = perform.toUpperCase();
-        if (upperPerform === 'ADD') {
-          newLogs.push(`Action: Created file '${target}'.`);
-          newProjectFiles[target] = content || '';
-          newActiveFile = target;
-        } else if (upperPerform === 'UPDATE') {
-          newLogs.push(`Action: Updated file '${target}'.`);
-          newProjectFiles[target] = content || '';
+        if (upperPerform === 'ADD') { newLogs.push(`Action: Created file '${target}'.`); newProjectFiles[target] = content || ''; newActiveFile = target;
+        } else if (upperPerform === 'UPDATE') { newLogs.push(`Action: Updated file '${target}'.`); newProjectFiles[target] = content || '';
         } else if (upperPerform === 'DELETE') {
           newLogs.push(`Action: Deleted file '${target}'.`);
           delete newProjectFiles[target];
@@ -193,24 +181,17 @@ function App() {
               const remainingFiles = Object.keys(newProjectFiles);
               newActiveFile = remainingFiles.length > 0 ? remainingFiles[0] : null;
           }
-        } else {
-          newLogs.push(`Error: Invalid AI action received: ${perform}`);
-        }
+        } else { newLogs.push(`Error: Invalid AI action received: ${perform}`); }
       }
       setActiveFile(newActiveFile);
       return newProjectFiles;
     });
-
     setAiLogs(prev => [...newLogs.reverse(), ...prev]);
   };
 
   const constructEnhancedPrompt = (userInput) => {
     let fullContext = "FULL PROJECT CONTEXT:\n\n";
-    for (const fileName in projectFiles) {
-      fullContext += `--- File: ${fileName} ---\n`;
-      fullContext += `${projectFiles[fileName]}\n\n`;
-    }
-
+    for (const fileName in projectFiles) { fullContext += `--- File: ${fileName} ---\n${projectFiles[fileName]}\n\n`; }
     return `${fullContext}USER REQUEST: "${userInput}"\n\nBased on the FULL PROJECT CONTEXT, fulfill the user's request.`;
   };
 
@@ -222,9 +203,7 @@ function App() {
     const fullPrompt = constructEnhancedPrompt(prompt);
     try {
       const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
-      const aiOutput = response.data.output;
-      const parsedResponse = parseAIResponse(aiOutput);
-      applyAIActions(parsedResponse);
+      applyAIActions(parseAIResponse(response.data.output));
     } catch (err) {
       const errorMessage = err.response?.data?.error || err.message || "An unknown error occurred.";
       setError(errorMessage);
@@ -234,10 +213,7 @@ function App() {
     }
   };
   
-  const handleSelectFile = (file) => {
-    setActiveFile(file);
-    setMobileView('editor');
-  };
+  const handleSelectFile = (file) => { setActiveFile(file); setMobileView('editor'); };
   
   const handleResetProject = () => {
     if (window.confirm("Are you sure you want to reset the project? All changes will be lost.")) {
@@ -248,21 +224,48 @@ function App() {
     }
   };
 
-  const previewContent = useMemo(() => {
-    if (!projectFiles || !projectFiles['index.html']) {
-        return '<h1>Project loading or index.html not found...</h1>';
+  const handleTogglePreviewMode = () => setIsPreviewDesktop(prev => !prev);
+  
+  const handleRefreshPreview = () => {
+    if (iframeRef.current) {
+      try {
+        iframeRef.current.contentWindow.location.reload();
+      } catch (e) {
+        console.error("Error refreshing preview:", e);
+      }
     }
+  };
+
+  const handleScreenshot = async () => {
+    if (!iframeRef.current) return;
+    try {
+      const body = iframeRef.current.contentWindow.document.body;
+      const canvas = await html2canvas(body, {
+        width: isPreviewDesktop ? 1280 : body.scrollWidth,
+        height: isPreviewDesktop ? 720 : body.scrollHeight,
+        windowWidth: isPreviewDesktop ? 1280 : body.scrollWidth,
+        windowHeight: isPreviewDesktop ? 720 : body.scrollHeight,
+      });
+      const image = canvas.toDataURL('image/jpeg', 0.9);
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = 'neko-screenshot.jpeg';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch(e) {
+      console.error("Error taking screenshot:", e);
+      alert("Could not take screenshot. The preview might be empty or contain cross-origin content.");
+    }
+  };
+
+  const previewContent = useMemo(() => {
+    if (!projectFiles || !projectFiles['index.html']) return '<h1>Project loading or index.html not found...</h1>';
     const html = projectFiles['index.html'];
     const css = projectFiles['style.css'] || '';
     const js = projectFiles['script.js'] || '';
-    const withCss = html.replace(
-      /<link[^>]*?href=["']style\.css["'][^>]*?>/,
-      `<style>${css}</style>`
-    );
-    const withJs = withCss.replace(
-      /<script[^>]*?src=["']script\.js["'][^>]*?><\/script>/,
-      `<script>${js}</script>`
-    );
+    const withCss = html.replace(/<link[^>]*?href=["']style\.css["'][^>]*?>/, `<style>${css}</style>`);
+    const withJs = withCss.replace(/<script[^>]*?src=["']script\.js["'][^>]*?><\/script>/, `<script>${js}</script>`);
     return withJs;
   }, [projectFiles]);
 
@@ -273,9 +276,7 @@ function App() {
           <Cat className="h-8 w-8 text-pink-400" />
           <h1 className="text-xl font-bold text-white">Neko Code Editor</h1>
         </div>
-        <button onClick={handleResetProject} className="p-2 text-gray-400 hover:text-red-400 transition-colors" title="Reset Project">
-          <Trash2 size={20} />
-        </button>
+        <button onClick={handleResetProject} className="p-2 text-gray-400 hover:text-red-400 transition-colors" title="Reset Project"><Trash2 size={20} /></button>
       </header>
       
       <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
@@ -285,7 +286,7 @@ function App() {
         <div className="flex-grow flex flex-col overflow-hidden">
           <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-px bg-gray-700">
             <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />
-            <PreviewPane htmlContent={previewContent} />
+            <PreviewPane htmlContent={previewContent} iframeRef={iframeRef} isDesktopView={isPreviewDesktop} onToggle={handleTogglePreviewMode} onRefresh={handleRefreshPreview} onScreenshot={handleScreenshot} />
           </div>
           <div className="h-1/3 flex flex-col bg-gray-800/50 border-t border-gray-700">
              <AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} />
@@ -295,7 +296,7 @@ function App() {
       
       <main className="flex-grow md:hidden overflow-hidden pb-16">
         {mobileView === 'editor' && <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />}
-        {mobileView === 'preview' && <PreviewPane htmlContent={previewContent} />}
+        {mobileView === 'preview' && <PreviewPane htmlContent={previewContent} iframeRef={iframeRef} isDesktopView={isPreviewDesktop} onToggle={handleTogglePreviewMode} onRefresh={handleRefreshPreview} onScreenshot={handleScreenshot} />}
         {mobileView === 'files' && <FilesPane files={projectFiles} activeFile={activeFile} onSelectFile={handleSelectFile} />}
         {mobileView === 'ai' && <AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} />}
       </main>
