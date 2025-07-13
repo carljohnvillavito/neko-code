@@ -31,8 +31,8 @@ const PreviewPane = ({ htmlContent, iframeRef, isDesktopView, onToggle, onRefres
             <button onClick={onRefresh} title="Refresh Preview" className="p-1 text-gray-400 hover:text-white transition-colors"><RefreshCw size={18} /></button>
         </div>
     </div>
-    {/* The fix is here: added flex, items-center, justify-center to the container */}
-    <div className="flex-grow bg-white relative overflow-hidden flex items-center justify-center">
+    {/* THE FIX: Using 'grid' and 'place-items-center' for robust centering. */}
+    <div className="flex-grow bg-white grid place-items-center overflow-hidden">
       <Preview ref={iframeRef} htmlContent={htmlContent} isDesktopView={isDesktopView} />
     </div>
   </div>
