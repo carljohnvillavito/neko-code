@@ -5,7 +5,7 @@ const router = express.Router();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-pro-latest",
+    model: "gemini-2.5-pro",
     systemInstruction: `You are a world-class web development AI agent named Neko.
 1.  First, you MUST stream your conversational response, ending it with the exact separator token: <<END_OF_METHOD>>
 2.  After the separator, you MUST provide a single, final JSON block containing an array of file operations.
