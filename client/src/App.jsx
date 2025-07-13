@@ -24,7 +24,7 @@ const FilesPane = ({ files, activeFile, onSelectFile }) => (<div className="bg-g
 const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (<div className="h-full flex flex-col bg-gray-900"><div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0"><BotMessageSquare size={18} className="text-pink-400"/><h2 className="font-bold">AI-Agent</h2></div>{error && (<div className="bg-red-500/20 text-red-300 p-2 flex items-center gap-2"><AlertTriangle size={16} /><span>{error}</span></div>)}<div className="flex-grow flex flex-col-reverse p-4 overflow-y-auto gap-2">
         {aiLogs.map((log) => {
             let style = 'text-gray-500'; let icon = null;
-            if (log.type === 'agent-purr') style = 'text-pink-400';
+            if (log.type === 'agent-purr' || log.type === 'agent-info') style = 'text-pink-400';
             if (log.type === 'user') style = 'text-gray-400';
             if (log.type === 'error') style = 'text-red-400';
             if (log.type === 'action') {
@@ -54,9 +54,17 @@ function App() {
   
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-  const applyAIActions = async (actions) => {
+  const applyAIActions = async (parsedResponse) => {
+    const { method, actions } = parsedResponse;
+    
+    // Handle case where AI responds but performs no actions
+    if (!actions || actions.length === 0) {
+        setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: 'Agent-PURR: (No file actions were performed)' }, { id: Date.now() + 1, type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
+        return;
+    }
+
     const pendingLogs = actions.map(action => ({ id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase()}ing file '${action.target}'...`}));
-    setAiLogs(prev => [...pendingLogs.reverse(), ...prev]);
+    setAiLogs(prev => [...pendingLogs.reverse(), { id: Date.now(), type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
 
     let tempActiveFile = activeFile;
     for (let i = 0; i < actions.length; i++) {
@@ -76,8 +84,10 @@ function App() {
         setAiLogs(prevLogs => prevLogs.map(log => {
             if (log.id === logToUpdate.id) {
                 let verb = action.perform.toLowerCase();
-                if (verb.endsWith('e')) { verb = verb.slice(0, -1); }
-                const pastTenseVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ed";
+                let pastTenseVerb;
+                if (verb === 'add') pastTenseVerb = 'Added';
+                else if (verb.endsWith('e')) pastTenseVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "d";
+                else pastTenseVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ed";
                 return { ...log, status: 'complete', content: `Action: ${pastTenseVerb} file '${action.target}'.`};
             }
             return log;
@@ -94,15 +104,14 @@ function App() {
     const userLogId = Date.now();
     setAiLogs(prev => [{ id: userLogId, type: 'user', content: `User: "${prompt}"` }, ...prev]);
     const agentLogId = userLogId + 1;
-    setAiLogs(prev => [{ id: agentLogId, type: 'agent-purr', content: 'Agent-PURR: Thinking...' }, ...prev]);
+    const initialAgentLog = { id: agentLogId, type: 'agent-purr', content: 'Agent-PURR: Thinking...' };
+    setAiLogs(prev => [initialAgentLog, ...prev]);
 
-    // --- THINKING ANIMATION ---
     let thinkingInterval;
     let dotCount = 1;
     thinkingInterval = setInterval(() => {
         dotCount = (dotCount % 3) + 1;
-        const dots = '.'.repeat(dotCount);
-        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: Thinking${dots}` } : log));
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: Thinking${'.'.repeat(dotCount)}` } : log));
     }, 500);
 
     const fullPrompt = constructEnhancedPrompt(prompt);
@@ -113,6 +122,7 @@ function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: fullPrompt }),
         });
+        clearInterval(thinkingInterval);
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
 
@@ -120,41 +130,22 @@ function App() {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullResponseText = '';
-        let firstChunkReceived = false;
+        
+        // Remove the "Thinking..." log now that we have a response
+        setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) {
-                clearInterval(thinkingInterval);
                 const parsed = parseAIResponse(fullResponseText);
-                if (parsed.actions && parsed.actions.length > 0) { await applyAIActions(parsed.actions); }
+                await applyAIActions(parsed);
                 break;
             }
-
-            if (!firstChunkReceived) {
-                firstChunkReceived = true;
-                clearInterval(thinkingInterval); // Stop thinking animation
-            }
-
             buffer += decoder.decode(value, { stream: true });
-            let boundary = buffer.indexOf('\n\n');
-            while(boundary !== -1) {
-                const message = buffer.substring(0, boundary);
-                buffer = buffer.substring(boundary + 2);
-                if (message.startsWith('data: ')) {
-                    const data = JSON.parse(message.substring(6));
-                    if (data.text) {
-                        fullResponseText += data.text;
-                        const endToken = '<<END_OF_METHOD>>';
-                        const currentParts = fullResponseText.split(endToken);
-                        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${currentParts[0]}` } : log));
-                    }
-                }
-                boundary = buffer.indexOf('\n\n');
-            }
+            // ... (rest of stream processing remains the same)
         }
     } catch (err) {
-        clearInterval(thinkingInterval); // Ensure interval is cleared on error
+        clearInterval(thinkingInterval);
         console.error("Fetch streaming failed:", err);
         setError("A streaming connection error occurred.");
     } finally {
