@@ -132,18 +132,18 @@ function App() {
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
         let fullResponseText = '';
         let firstChunkReceived = false;
 
         while (true) {
             const { done, value } = await reader.read();
-            
             if (done) {
+                clearInterval(thinkingInterval);
                 const parsed = parseAIResponse(fullResponseText);
+                setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
                 if (parsed.actions && parsed.actions.length > 0) {
                     await applyAIActions(parsed.actions);
-                } else {
-                    setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
                 }
                 break;
             }
