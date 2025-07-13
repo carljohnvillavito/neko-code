@@ -19,8 +19,26 @@ const initialFiles = {
 
 // --- STABLE PANE COMPONENTS ---
 const EditorPane = ({ activeFile, fileContent, onChange }) => (<div className="bg-gray-900 flex flex-col h-full"><div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0"><Code size={18} className="text-cyan-400" /><h2 className="font-bold">Editor: {activeFile}</h2></div><div className="flex-grow overflow-hidden">{activeFile ? (<Editor activeFile={activeFile} fileContent={fileContent} onChange={onChange} />) : (<div className="p-4 text-gray-500">Select a file to start editing.</div>)}</div></div>);
-const PreviewPane = ({ htmlContent, iframeRef, isDesktopView, onToggle, onRefresh, onScreenshot }) => (<div className="bg-gray-900 flex flex-col h-full"><div className="bg-gray-800 p-2 flex items-center justify-between border-b border-gray-700 flex-shrink-0"><div className="flex items-center gap-2"><Eye size={18} className="text-lime-400" /><h2 className="font-bold">Live Preview</h2></div><div className="flex items-center gap-2"><button onClick={onToggle} title={isDesktopView ? "Switch to Mobile View" : "Switch to Desktop View"} className="p-1 text-gray-400 hover:text-white transition-colors">{isDesktopView ? <Smartphone size={18} /> : <Laptop size={18} />}</button><button onClick={onScreenshot} title="Take Screenshot" className="p-1 text-gray-400 hover:text-white transition-colors"><Camera size={18} /></button><button onClick={onRefresh} title="Refresh Preview" className="p-1 text-gray-400 hover:text-white transition-colors"><RefreshCw size={18} /></button></div></div><div className="flex-grow bg-gray-700 grid place-items-center overflow-hidden"><Preview ref={iframeRef} htmlContent={htmlContent} isDesktopView={isDesktopView} /></div></div>);
+
+const PreviewPane = ({ htmlContent, iframeRef, isDesktopView, onToggle, onRefresh, onScreenshot }) => (
+  <div className="bg-gray-900 flex flex-col h-full">
+    <div className="bg-gray-800 p-2 flex items-center justify-between border-b border-gray-700 flex-shrink-0">
+        <div className="flex items-center gap-2"><Eye size={18} className="text-lime-400" /><h2 className="font-bold">Live Preview</h2></div>
+        <div className="flex items-center gap-2">
+            <button onClick={onToggle} title={isDesktopView ? "Switch to Mobile View" : "Switch to Desktop View"} className="p-1 text-gray-400 hover:text-white transition-colors">{isDesktopView ? <Smartphone size={18} /> : <Laptop size={18} />}</button>
+            <button onClick={onScreenshot} title="Take Screenshot" className="p-1 text-gray-400 hover:text-white transition-colors"><Camera size={18} /></button>
+            <button onClick={onRefresh} title="Refresh Preview" className="p-1 text-gray-400 hover:text-white transition-colors"><RefreshCw size={18} /></button>
+        </div>
+    </div>
+    {/* THE FIX: This container is now a simple relative positioning context. */}
+    <div className="flex-grow bg-gray-700 relative overflow-hidden">
+      <Preview ref={iframeRef} htmlContent={htmlContent} isDesktopView={isDesktopView} />
+    </div>
+  </div>
+);
+
 const FilesPane = ({ files, activeFile, onSelectFile }) => (<div className="bg-gray-900 flex flex-col h-full p-2"><Sidebar files={files} activeFile={activeFile} onSelectFile={onSelectFile} /></div>);
+
 const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (<div className="h-full flex flex-col bg-gray-900"><div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0"><BotMessageSquare size={18} className="text-pink-400"/><h2 className="font-bold">AI-Agent</h2></div>{error && (<div className="bg-red-500/20 text-red-300 p-2 flex items-center gap-2"><AlertTriangle size={16} /><span>{error}</span></div>)}<div className="flex-grow flex flex-col-reverse p-4 overflow-y-auto gap-2">
         {aiLogs.map((log) => {
             let style = 'text-gray-500'; let icon = null;
@@ -162,7 +180,6 @@ function App() {
         <button onClick={handleResetProject} className="p-2 text-gray-400 hover:text-red-400 transition-colors" title="Reset Project"><Trash2 size={20} /></button>
       </header>
       
-      {/* Desktop Layout */}
       <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
         <div className="w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2">
            <Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={setActiveFile} />
@@ -178,8 +195,6 @@ function App() {
         </div>
       </div>
       
-      {/* --- MOBILE LAYOUT --- */}
-      {/* THE FIX IS HERE: We now always render all panes, and use CSS `hidden` class to toggle visibility */}
       <main className="flex-grow md:hidden relative overflow-hidden pb-16">
         <div className={`h-full ${mobileView === 'editor' ? 'block' : 'hidden'}`}>
           <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />
