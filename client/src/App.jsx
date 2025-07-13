@@ -57,8 +57,8 @@ function App() {
 
   const applyAIActions = async (actions) => {
     if (!actions || actions.length === 0) {
-      setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
-      return;
+        setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
+        return;
     }
     const pendingLogs = actions.map(action => { let verb = action.perform.toLowerCase(); if (verb.endsWith('e')) { verb = verb.slice(0, -1); } const pendingVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ing"; return { id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${pendingVerb} file '${action.target}'...`}; });
     setAiLogs(prev => [...pendingLogs.reverse(), ...prev]);
@@ -96,18 +96,28 @@ function App() {
     if (!prompt || isLoading) return;
     setIsLoading(true); setError(null);
     setAiLogs(prev => [{ id: Date.now(), type: 'user', content: `User: "${prompt}"` }, ...prev]);
+    
     const agentLogId = Date.now() + 1;
     setAiLogs(prev => [{ id: agentLogId, type: 'agent-purr', content: 'Agent-PURR: Thinking...' }, ...prev]);
-    let thinkingInterval = setInterval(() => { setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log)); }, 500);
+    
+    let thinkingInterval = setInterval(() => {
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log));
+    }, 500);
+
     const fullPrompt = constructEnhancedPrompt(prompt);
+    
     try {
         const response = await fetch(`${API_URL}/api/ask-ai-stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt }), });
+        
         clearInterval(thinkingInterval);
+
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullResponseText = '';
+
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -118,13 +128,17 @@ function App() {
                     try {
                         const data = JSON.parse(line.substring(6));
                         if(data.text) { fullResponseText += data.text; }
-                    } catch(e) { /* Ignore malformed JSON chunks */ }
+                    } catch(e) { /* Ignore malformed JSON chunks that can occur during streaming */ }
                 }
             }
         }
+        
         const parsed = parseAIResponse(fullResponseText);
+        
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
+        
         await applyAIActions(parsed.actions);
+
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
