@@ -108,47 +108,32 @@ function App() {
     
     try {
         const response = await fetch(`${API_URL}/api/ask-ai-stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt }), });
+        
         clearInterval(thinkingInterval);
+
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullResponseText = '';
-        let firstChunkReceived = false;
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-                // This is now the single point of truth for parsing and applying actions
-                const parsed = parseAIResponse(fullResponseText);
-                setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
-                await applyAIActions(parsed.actions);
-                break;
-            }
-
-            if (!firstChunkReceived) {
-                firstChunkReceived = true;
-                // Don't clear interval here anymore, let the stream text overwrite "Thinking..."
-            }
-
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.substring(6));
-                        if (data.text) {
-                            fullResponseText += data.text;
-                            const endToken = '<<END_OF_METHOD>>';
-                            const conversationalPart = fullResponseText.split(endToken)[0];
-                            setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${conversationalPart}` } : log));
-                        }
-                    } catch (e) {
-                        // Ignore malformed JSON chunks that can happen during streaming
-                    }
-                }
-            }
+            if (done) break;
+            fullResponseText += decoder.decode(value, { stream: true });
         }
+        
+        const cleanText = fullResponseText.replace(/data: /g, '').split('\n\n').map(s => {
+            try { return JSON.parse(s).text } catch { return null }
+        }).filter(Boolean).join('');
+
+        const parsed = parseAIResponse(cleanText);
+        
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
+        
+        await applyAIActions(parsed.actions);
+
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
