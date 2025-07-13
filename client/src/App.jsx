@@ -41,27 +41,14 @@ const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (<div className="h-ful
 function App() {
   const [projectFiles, setProjectFiles] = useState(() => { try { const sf = localStorage.getItem('neko-project-files'); return sf ? JSON.parse(sf) : initialFiles; } catch (e) { return initialFiles; } });
   const [activeFile, setActiveFile] = useState('index.html');
-  
-  // Load AI logs from localStorage on initial render
-  const [aiLogs, setAiLogs] = useState(() => {
-    try {
-      const savedLogs = localStorage.getItem('neko-ai-logs');
-      return savedLogs ? JSON.parse(savedLogs) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
+  const [aiLogs, setAiLogs] = useState(() => { try { const sl = localStorage.getItem('neko-ai-logs'); return sl ? JSON.parse(sl) : []; } catch(e) { return []; }});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mobileView, setMobileView] = useState('editor');
   const [isPreviewDesktop, setIsPreviewDesktop] = useState(false);
   const iframeRef = useRef(null);
   
-  // Save project files to localStorage whenever they change
   useEffect(() => { localStorage.setItem('neko-project-files', JSON.stringify(projectFiles)); }, [projectFiles]);
-
-  // Save AI logs to localStorage whenever they change
   useEffect(() => { localStorage.setItem('neko-ai-logs', JSON.stringify(aiLogs)); }, [aiLogs]);
 
   const handleFileContentChange = (newContent) => { if (newContent !== undefined) setProjectFiles(p => ({...p, [activeFile]: newContent})); };
@@ -70,14 +57,20 @@ function App() {
 
   const applyAIActions = async (parsedResponse) => {
     const { method, actions } = parsedResponse;
-    setAiLogs(prev => [{ id: Date.now(), type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
 
     if (!actions || actions.length === 0) {
-        setAiLogs(prev => [{ id: Date.now() + 1, type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
-        return;
+      setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, { id: Date.now() + 1, type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
+      return;
     }
+    
+    setAiLogs(prev => [{ id: Date.now(), type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
 
-    const pendingLogs = actions.map(action => ({ id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase()}ing file '${action.target}'...`}));
+    const pendingLogs = actions.map(action => {
+        let verb = action.perform.toLowerCase();
+        if (verb.endsWith('e')) { verb = verb.slice(0, -1); } // delete -> delet
+        const pendingVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ing";
+        return { id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${pendingVerb} file '${action.target}'...`};
+    });
     setAiLogs(prev => [...pendingLogs.reverse(), ...prev]);
 
     let tempActiveFile = activeFile;
@@ -133,8 +126,7 @@ function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: fullPrompt }),
         });
-        clearInterval(thinkingInterval);
-        setAiLogs(prev => prev.filter(log => log.id !== agentLogId)); 
+
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
 
@@ -142,14 +134,23 @@ function App() {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullResponseText = '';
+        let firstChunkReceived = false;
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) {
+                clearInterval(thinkingInterval);
+                setAiLogs(prev => prev.filter(log => log.id !== agentLogId)); // Remove the temp log
                 const parsed = parseAIResponse(fullResponseText);
                 await applyAIActions(parsed);
                 break;
             }
+
+            if (!firstChunkReceived) {
+                firstChunkReceived = true;
+                clearInterval(thinkingInterval);
+            }
+
             buffer += decoder.decode(value, { stream: true });
             let boundary = buffer.indexOf('\n\n');
             while(boundary !== -1) {
@@ -157,7 +158,9 @@ function App() {
                 buffer = buffer.substring(boundary + 2);
                 if (message.startsWith('data: ')) {
                     const data = JSON.parse(message.substring(6));
-                    if (data.text) { fullResponseText += data.text; }
+                    if (data.text) {
+                        fullResponseText += data.text;
+                    }
                 }
                 boundary = buffer.indexOf('\n\n');
             }
@@ -172,14 +175,7 @@ function App() {
     }
   };
 
-  const handleResetProject = () => { if (window.confirm("Are you sure? All files and chat history will be deleted.")) { 
-    localStorage.removeItem('neko-project-files'); 
-    localStorage.removeItem('neko-ai-logs');
-    setProjectFiles(initialFiles); 
-    setAiLogs([]);
-    setActiveFile('index.html'); 
-  }};
-
+  const handleResetProject = () => { if (window.confirm("Are you sure? All files and chat history will be deleted.")) { localStorage.removeItem('neko-project-files'); localStorage.removeItem('neko-ai-logs'); setProjectFiles(initialFiles); setAiLogs([]); setActiveFile('index.html'); }};
   const handleTogglePreviewMode = () => setIsPreviewDesktop(prev => !prev);
   const handleRefreshPreview = () => { if (iframeRef.current) iframeRef.current.contentWindow.location.reload(); };
   const handleScreenshot = async () => { if (!iframeRef.current) return; try { const b = iframeRef.current.contentWindow.document.body; const c = await html2canvas(b, { width: isPreviewDesktop ? 1280 : b.scrollWidth, height: isPreviewDesktop ? 720 : b.scrollHeight, windowWidth: isPreviewDesktop ? 1280 : b.scrollWidth, windowHeight: isPreviewDesktop ? 720 : b.scrollHeight }); const i = c.toDataURL('image/jpeg', 0.9); const l = document.createElement('a'); l.href = i; l.download = 'neko-screenshot.jpeg'; document.body.appendChild(l); l.click(); document.body.removeChild(l); } catch(e) { alert("Could not take screenshot."); }};
