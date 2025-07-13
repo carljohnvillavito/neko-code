@@ -8,9 +8,8 @@ import { BottomNavbar } from './components/BottomNavbar';
 import { parseAIResponse } from './utils/parseAIResponse';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban } from 'lucide-react';
 
-// REMOVED: No need to construct the API URL. We will use a relative path.
-// const API_HOST = import.meta.env.VITE_API_HOST;
-// const API_URL = API_HOST ? `https://${API_HOST}` : '...';
+const API_HOST = import.meta.env.VITE_API_HOST;
+const API_URL = API_HOST ? `https://${API_HOST}` : 'https://tinidor-code-api.onrender.com';
 
 const initialFiles = {
   'index.html': `<!DOCTYPE html>
@@ -136,41 +135,55 @@ function App() {
     }));
   };
   
-  const applyAIAction = (action) => {
-    const { perform, target, content, method } = action;
+  // Renamed to handle multiple actions
+  const applyAIActions = (parsedResponse) => {
+    const { method, actions } = parsedResponse;
   
-    if (!perform || !target) {
-        setError("Invalid AI response from server.");
+    if (!actions || actions.length === 0) {
+        setError("AI did not provide any actions to perform.");
+        setAiLogs(prev => [`Agent-PURR: "${method}"`, ...prev]);
         return;
     }
 
-    let actionLog = '';
     const conversationalLog = `Agent-PURR: "${method}"`;
+    const newLogs = [conversationalLog];
+    
+    // Create a mutable copy to apply all changes to
     const newProjectFiles = { ...projectFiles };
     let newActiveFile = activeFile;
+    
+    for (const action of actions) {
+      const { perform, target, content } = action;
+      if (!perform || !target) {
+        newLogs.push(`Error: Invalid action object received from AI.`);
+        continue; // Skip invalid actions
+      }
+      
+      const upperPerform = perform.toUpperCase();
 
-    if (perform.toUpperCase() === 'ADD') {
-        actionLog = `Action: Created file '${target}'.`;
-        newProjectFiles[target] = content;
+      if (upperPerform === 'ADD') {
+        newLogs.push(`Action: Created file '${target}'.`);
+        newProjectFiles[target] = content || '';
         newActiveFile = target;
-    } else if (perform.toUpperCase() === 'UPDATE') {
-        actionLog = `Action: Updated file '${target}'.`;
-        newProjectFiles[target] = content;
-    } else if (perform.toUpperCase() === 'DELETE') {
-        actionLog = `Action: Deleted file '${target}'.`;
+      } else if (upperPerform === 'UPDATE') {
+        newLogs.push(`Action: Updated file '${target}'.`);
+        newProjectFiles[target] = content || '';
+      } else if (upperPerform === 'DELETE') {
+        newLogs.push(`Action: Deleted file '${target}'.`);
         delete newProjectFiles[target];
-        if (activeFile === target) {
+        if (newActiveFile === target) {
             const remainingFiles = Object.keys(newProjectFiles);
             newActiveFile = remainingFiles.length > 0 ? remainingFiles[0] : null;
         }
-    } else {
-        setError(`Invalid AI action received: ${perform}`);
-        return;
+      } else {
+        newLogs.push(`Error: Invalid AI action received: ${perform}`);
+      }
     }
 
+    // Apply all state changes at once after the loop
     setProjectFiles(newProjectFiles);
     setActiveFile(newActiveFile);
-    setAiLogs(prev => [actionLog, conversationalLog, ...prev]);
+    setAiLogs(prev => [...newLogs.reverse(), ...prev]); // Add new logs to the top
   };
 
   const constructPrompt = (userInput) => {
@@ -183,7 +196,7 @@ Currently Active File ('${activeFile}'):
 ---
 ${activeFileContent}
 ---
-Based on the user request, analyze the project structure and the active file, then generate a response in the required format to modify the project.
+Based on the user request, analyze the project structure and the active file, then generate a response in the required format to modify the project. Remember you can perform multiple file operations.
 `;
   };
 
@@ -194,19 +207,11 @@ Based on the user request, analyze the project structure and the active file, th
     setAiLogs(prev => [`User: "${prompt}"`, ...prev]);
     const fullPrompt = constructPrompt(prompt);
     try {
-      // Use a relative path. Render's proxy will handle routing this to the backend.
-      const response = await axios.post(`/api/ask-ai`, { prompt: fullPrompt });
+      const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
       const aiOutput = response.data.output;
-      const parsedAction = parseAIResponse(aiOutput);
-      applyAIAction(parsedAction);
+      const parsedResponse = parseAIResponse(aiOutput);
+      applyAIActions(parsedResponse);
     } catch (err) {
-      if (err.response) {
-        console.error("API Error Response:", err.response.data);
-      } else if (err.request) {
-        console.error("API No Response:", err.request);
-      } else {
-        console.error('API Setup Error:', err.message);
-      }
       const errorMessage = err.response?.data?.error || err.message || "An unknown error occurred.";
       setError(errorMessage);
       setAiLogs(prev => [`Error: ${errorMessage}`, ...prev]);
