@@ -57,59 +57,41 @@ function App() {
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
   const applyAIActions = async (actions) => {
-    // 1. Create unique IDs for each pending action log entry
     const pendingLogs = actions.map(action => {
       const verb = action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase();
-      return {
-        id: Date.now() + Math.random(),
-        type: 'action',
-        status: 'pending',
-        content: `${verb}ing file '${action.target}'...` // e.g., "Updating file 'style.css'..."
-      };
+      return { id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${verb}ing file '${action.target}'...`};
     });
     setAiLogs(prev => [...pendingLogs.reverse(), ...prev]);
 
-    // 2. Process each action sequentially with a delay
     let tempActiveFile = activeFile;
     for (let i = 0; i < actions.length; i++) {
-        await delay(1000); // Wait 1 second before processing the next action
-        
+        await delay(1000);
         const action = actions[i];
         const logToUpdate = pendingLogs[i];
         
-        // Update the project files state based on the action
         setProjectFiles(currentFiles => {
             const newFiles = { ...currentFiles };
             const upperPerform = action.perform.toUpperCase();
-            if (upperPerform === 'ADD') {
-                newFiles[action.target] = action.content || '';
-                tempActiveFile = action.target;
-            } else if (upperPerform === 'UPDATE') {
-                newFiles[action.target] = action.content || '';
-            } else if (upperPerform === 'DELETE') {
-                delete newFiles[action.target];
-                if (tempActiveFile === action.target) {
-                    const remaining = Object.keys(newFiles);
-                    tempActiveFile = remaining.length > 0 ? remaining[0] : null;
-                }
-            }
+            if (upperPerform === 'ADD') { newFiles[action.target] = action.content || ''; tempActiveFile = action.target; }
+            else if (upperPerform === 'UPDATE') { newFiles[action.target] = action.content || ''; }
+            else if (upperPerform === 'DELETE') { delete newFiles[action.target]; if (tempActiveFile === action.target) { const r = Object.keys(newFiles); tempActiveFile = r.length > 0 ? r[0] : null; } }
             return newFiles;
         });
 
-        // Update the log entry to "complete"
         setAiLogs(prevLogs => prevLogs.map(log => {
             if (log.id === logToUpdate.id) {
-                const verb = action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase();
-                return {
-                    ...log,
-                    status: 'complete',
-                    content: `Action: ${verb}d file '${action.target}'.` // e.g., "Action: Updated file 'style.css'."
-                };
+                // --- GRAMMAR FIX IS HERE ---
+                let verb = action.perform.toLowerCase();
+                if (verb.endsWith('e')) {
+                    verb = verb.slice(0, -1); // "update" -> "updat", "delete" -> "delet"
+                }
+                const pastTenseVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ed"; // "updated", "deleted", "added"
+
+                return { ...log, status: 'complete', content: `Action: ${pastTenseVerb} file '${action.target}'.`};
             }
             return log;
         }));
     }
-    // Set the active file at the very end
     setActiveFile(tempActiveFile);
   };
 
@@ -143,7 +125,7 @@ function App() {
             if (done) {
                 const parsed = parseAIResponse(fullResponseText);
                 if (parsed.actions && parsed.actions.length > 0) {
-                    await applyAIActions(parsed.actions); // Now an async call
+                    await applyAIActions(parsed.actions);
                 }
                 break;
             }
