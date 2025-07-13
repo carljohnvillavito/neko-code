@@ -46,6 +46,7 @@ function App() {
   const [error, setError] = useState(null);
   const [mobileView, setMobileView] = useState('editor');
   const [isPreviewDesktop, setIsPreviewDesktop] = useState(false);
+  const [lastValidMessage, setLastValidMessage] = useState(''); // Buffer for the last good message
   const iframeRef = useRef(null);
   
   useEffect(() => { localStorage.setItem('neko-project-files', JSON.stringify(projectFiles)); }, [projectFiles]);
@@ -117,36 +118,27 @@ function App() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullResponseText = '';
-        let firstChunkReceived = false;
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-                const parsed = parseAIResponse(fullResponseText);
-                setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
-                await applyAIActions(parsed.actions);
-                break;
-            }
-            if (!firstChunkReceived) {
-                firstChunkReceived = true;
-                // No need to clear interval here, it's handled above
-            }
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.substring(6));
-                        if(data.text) {
-                            fullResponseText += data.text;
-                            const endToken = '<<END_OF_METHOD>>';
-                            const conversationalPart = fullResponseText.split(endToken)[0];
-                            setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${conversationalPart}` } : log));
-                        }
-                    } catch(e) { /* Ignore malformed JSON chunks */ }
-                }
-            }
+            if (done) break;
+            fullResponseText += decoder.decode(value, { stream: true }).replace(/data: /g, '').trim();
         }
+        
+        const parsed = parseAIResponse(fullResponseText);
+        let finalMessage = parsed.method;
+
+        // THE FIX: Check for the fallback message and use the buffered message instead.
+        if (finalMessage === "Neko didn't provide a message." && lastValidMessage) {
+            finalMessage = lastValidMessage;
+        } else {
+            setLastValidMessage(finalMessage); // Buffer the new valid message
+        }
+        
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${finalMessage}"` } : log));
+        
+        await applyAIActions(parsed.actions);
+
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
