@@ -121,13 +121,16 @@ function App() {
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
-
+            if (done) {
+                const parsed = parseAIResponse(fullResponseText);
+                setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
+                await applyAIActions(parsed.actions);
+                break;
+            }
             if (!firstChunkReceived) {
                 firstChunkReceived = true;
-                // No need to clear interval here, we already did
+                // No need to clear interval here, it's handled above
             }
-
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n\n');
             for (const line of lines) {
@@ -144,14 +147,6 @@ function App() {
                 }
             }
         }
-        
-        const parsed = parseAIResponse(fullResponseText);
-        
-        // This is the key fix: update the conversational log first, THEN apply actions.
-        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
-        
-        await applyAIActions(parsed.actions);
-
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
