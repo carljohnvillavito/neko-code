@@ -109,11 +109,9 @@ function App() {
     try {
         const response = await fetch(`${API_URL}/api/ask-ai-stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt }), });
         
-        if (!response.ok) {
-            clearInterval(thinkingInterval);
-            setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        clearInterval(thinkingInterval);
+
+        if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
 
         const reader = response.body.getReader();
@@ -123,14 +121,11 @@ function App() {
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-                // This block is now only for finalization after the loop
-                break;
-            }
+            if (done) break;
 
             if (!firstChunkReceived) {
                 firstChunkReceived = true;
-                clearInterval(thinkingInterval);
+                // No need to clear interval here, we already did
             }
 
             const chunk = decoder.decode(value, { stream: true });
@@ -143,7 +138,6 @@ function App() {
                             fullResponseText += data.text;
                             const endToken = '<<END_OF_METHOD>>';
                             const conversationalPart = fullResponseText.split(endToken)[0];
-                            // This continuously updates the "Thinking..." log entry with the streaming text
                             setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${conversationalPart}` } : log));
                         }
                     } catch(e) { /* Ignore malformed JSON chunks */ }
@@ -151,9 +145,9 @@ function App() {
             }
         }
         
-        // After the stream is fully read, parse the complete text and apply actions
         const parsed = parseAIResponse(fullResponseText);
-        // Final, clean update to the conversational log
+        
+        // This is the key fix: update the conversational log first, THEN apply actions.
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
         
         await applyAIActions(parsed.actions);
