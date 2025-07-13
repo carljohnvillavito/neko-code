@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import axios from 'axios';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
@@ -6,7 +6,7 @@ import { Preview } from './components/Preview';
 import { Chatbox } from './components/Chatbox';
 import { BottomNavbar } from './components/BottomNavbar';
 import { parseAIResponse } from './utils/parseAIResponse';
-import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban } from 'lucide-react';
+import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban, Trash2 } from 'lucide-react';
 
 const API_HOST = import.meta.env.VITE_API_HOST;
 const API_URL = API_HOST ? `https://${API_HOST}` : 'https://tinidor-code-api.onrender.com';
@@ -120,12 +120,32 @@ const FilesPane = ({ files, activeFile, onSelectFile }) => (
 
 // --- MAIN APP COMPONENT ---
 function App() {
-  const [projectFiles, setProjectFiles] = useState(initialFiles);
+  const [projectFiles, setProjectFiles] = useState(() => {
+    try {
+      const savedFiles = localStorage.getItem('neko-project-files');
+      if (savedFiles) {
+        return JSON.parse(savedFiles);
+      }
+    } catch (error) {
+      console.error("Could not load files from localStorage", error);
+    }
+    return initialFiles;
+  });
+
   const [activeFile, setActiveFile] = useState('index.html');
   const [aiLogs, setAiLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mobileView, setMobileView] = useState('editor');
+  
+  // Effect to save files to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('neko-project-files', JSON.stringify(projectFiles));
+    } catch (error) {
+      console.error("Could not save files to localStorage", error);
+    }
+  }, [projectFiles]);
 
   const handleFileContentChange = (newContent) => {
     if (newContent === undefined) return;
@@ -135,7 +155,6 @@ function App() {
     }));
   };
   
-  // Renamed to handle multiple actions
   const applyAIActions = (parsedResponse) => {
     const { method, actions } = parsedResponse;
   
@@ -148,56 +167,51 @@ function App() {
     const conversationalLog = `Agent-PURR: "${method}"`;
     const newLogs = [conversationalLog];
     
-    // Create a mutable copy to apply all changes to
-    const newProjectFiles = { ...projectFiles };
-    let newActiveFile = activeFile;
-    
-    for (const action of actions) {
-      const { perform, target, content } = action;
-      if (!perform || !target) {
-        newLogs.push(`Error: Invalid action object received from AI.`);
-        continue; // Skip invalid actions
-      }
+    setProjectFiles(currentFiles => {
+      const newProjectFiles = { ...currentFiles };
+      let newActiveFile = activeFile;
       
-      const upperPerform = perform.toUpperCase();
-
-      if (upperPerform === 'ADD') {
-        newLogs.push(`Action: Created file '${target}'.`);
-        newProjectFiles[target] = content || '';
-        newActiveFile = target;
-      } else if (upperPerform === 'UPDATE') {
-        newLogs.push(`Action: Updated file '${target}'.`);
-        newProjectFiles[target] = content || '';
-      } else if (upperPerform === 'DELETE') {
-        newLogs.push(`Action: Deleted file '${target}'.`);
-        delete newProjectFiles[target];
-        if (newActiveFile === target) {
-            const remainingFiles = Object.keys(newProjectFiles);
-            newActiveFile = remainingFiles.length > 0 ? remainingFiles[0] : null;
+      for (const action of actions) {
+        const { perform, target, content } = action;
+        if (!perform || !target) {
+          newLogs.push(`Error: Invalid action object received from AI.`);
+          continue;
         }
-      } else {
-        newLogs.push(`Error: Invalid AI action received: ${perform}`);
+        
+        const upperPerform = perform.toUpperCase();
+        if (upperPerform === 'ADD') {
+          newLogs.push(`Action: Created file '${target}'.`);
+          newProjectFiles[target] = content || '';
+          newActiveFile = target;
+        } else if (upperPerform === 'UPDATE') {
+          newLogs.push(`Action: Updated file '${target}'.`);
+          newProjectFiles[target] = content || '';
+        } else if (upperPerform === 'DELETE') {
+          newLogs.push(`Action: Deleted file '${target}'.`);
+          delete newProjectFiles[target];
+          if (newActiveFile === target) {
+              const remainingFiles = Object.keys(newProjectFiles);
+              newActiveFile = remainingFiles.length > 0 ? remainingFiles[0] : null;
+          }
+        } else {
+          newLogs.push(`Error: Invalid AI action received: ${perform}`);
+        }
       }
-    }
+      setActiveFile(newActiveFile);
+      return newProjectFiles;
+    });
 
-    // Apply all state changes at once after the loop
-    setProjectFiles(newProjectFiles);
-    setActiveFile(newActiveFile);
-    setAiLogs(prev => [...newLogs.reverse(), ...prev]); // Add new logs to the top
+    setAiLogs(prev => [...newLogs.reverse(), ...prev]);
   };
 
-  const constructPrompt = (userInput) => {
-    const fileList = Object.keys(projectFiles).join(', ');
-    const activeFileContent = projectFiles[activeFile] || "No file is currently active.";
-    return `
-User Request: "${userInput}"
-Current Project File Structure: [${fileList}]
-Currently Active File ('${activeFile}'):
----
-${activeFileContent}
----
-Based on the user request, analyze the project structure and the active file, then generate a response in the required format to modify the project. Remember you can perform multiple file operations.
-`;
+  const constructEnhancedPrompt = (userInput) => {
+    let fullContext = "FULL PROJECT CONTEXT:\n\n";
+    for (const fileName in projectFiles) {
+      fullContext += `--- File: ${fileName} ---\n`;
+      fullContext += `${projectFiles[fileName]}\n\n`;
+    }
+
+    return `${fullContext}USER REQUEST: "${userInput}"\n\nBased on the FULL PROJECT CONTEXT, fulfill the user's request.`;
   };
 
   const handleAskAI = async (prompt) => {
@@ -205,7 +219,7 @@ Based on the user request, analyze the project structure and the active file, th
     setIsLoading(true);
     setError(null);
     setAiLogs(prev => [`User: "${prompt}"`, ...prev]);
-    const fullPrompt = constructPrompt(prompt);
+    const fullPrompt = constructEnhancedPrompt(prompt);
     try {
       const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
       const aiOutput = response.data.output;
@@ -224,9 +238,21 @@ Based on the user request, analyze the project structure and the active file, th
     setActiveFile(file);
     setMobileView('editor');
   };
+  
+  const handleResetProject = () => {
+    if (window.confirm("Are you sure you want to reset the project? All changes will be lost.")) {
+      localStorage.removeItem('neko-project-files');
+      setProjectFiles(initialFiles);
+      setActiveFile('index.html');
+      setAiLogs([]);
+    }
+  };
 
   const previewContent = useMemo(() => {
-    const html = projectFiles['index.html'] || '<h1>No index.html file to display.</h1>';
+    if (!projectFiles || !projectFiles['index.html']) {
+        return '<h1>Project loading or index.html not found...</h1>';
+    }
+    const html = projectFiles['index.html'];
     const css = projectFiles['style.css'] || '';
     const js = projectFiles['script.js'] || '';
     const withCss = html.replace(
@@ -247,6 +273,9 @@ Based on the user request, analyze the project structure and the active file, th
           <Cat className="h-8 w-8 text-pink-400" />
           <h1 className="text-xl font-bold text-white">Neko Code Editor</h1>
         </div>
+        <button onClick={handleResetProject} className="p-2 text-gray-400 hover:text-red-400 transition-colors" title="Reset Project">
+          <Trash2 size={20} />
+        </button>
       </header>
       
       <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
