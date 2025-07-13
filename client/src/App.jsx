@@ -19,7 +19,25 @@ const initialFiles = {
 
 // --- STABLE PANE COMPONENTS ---
 const EditorPane = ({ activeFile, fileContent, onChange }) => (<div className="bg-gray-900 flex flex-col h-full"><div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0"><Code size={18} className="text-cyan-400" /><h2 className="font-bold">Editor: {activeFile}</h2></div><div className="flex-grow overflow-hidden">{activeFile ? (<Editor activeFile={activeFile} fileContent={fileContent} onChange={onChange} />) : (<div className="p-4 text-gray-500">Select a file to start editing.</div>)}</div></div>);
-const PreviewPane = ({ htmlContent, iframeRef, isDesktopView, onToggle, onRefresh, onScreenshot }) => (<div className="bg-gray-900 flex flex-col h-full"><div className="bg-gray-800 p-2 flex items-center justify-between border-b border-gray-700 flex-shrink-0"><div className="flex items-center gap-2"><Eye size={18} className="text-lime-400" /><h2 className="font-bold">Live Preview</h2></div><div className="flex items-center gap-2"><button onClick={onToggle} title={isDesktopView ? "Switch to Mobile View" : "Switch to Desktop View"} className="p-1 text-gray-400 hover:text-white transition-colors">{isDesktopView ? <Smartphone size={18} /> : <Laptop size={18} />}</button><button onClick={onScreenshot} title="Take Screenshot" className="p-1 text-gray-400 hover:text-white transition-colors"><Camera size={18} /></button><button onClick={onRefresh} title="Refresh Preview" className="p-1 text-gray-400 hover:text-white transition-colors"><RefreshCw size={18} /></button></div></div><div className="flex-grow bg-white relative overflow-hidden"><Preview ref={iframeRef} htmlContent={htmlContent} isDesktopView={isDesktopView} /></div></div>);
+
+// -- CORRECTED PREVIEW PANE --
+const PreviewPane = ({ htmlContent, iframeRef, isDesktopView, onToggle, onRefresh, onScreenshot }) => (
+  <div className="bg-gray-900 flex flex-col h-full">
+    <div className="bg-gray-800 p-2 flex items-center justify-between border-b border-gray-700 flex-shrink-0">
+        <div className="flex items-center gap-2"><Eye size={18} className="text-lime-400" /><h2 className="font-bold">Live Preview</h2></div>
+        <div className="flex items-center gap-2">
+            <button onClick={onToggle} title={isDesktopView ? "Switch to Mobile View" : "Switch to Desktop View"} className="p-1 text-gray-400 hover:text-white transition-colors">{isDesktopView ? <Smartphone size={18} /> : <Laptop size={18} />}</button>
+            <button onClick={onScreenshot} title="Take Screenshot" className="p-1 text-gray-400 hover:text-white transition-colors"><Camera size={18} /></button>
+            <button onClick={onRefresh} title="Refresh Preview" className="p-1 text-gray-400 hover:text-white transition-colors"><RefreshCw size={18} /></button>
+        </div>
+    </div>
+    {/* The fix is here: added flex, items-center, justify-center to the container */}
+    <div className="flex-grow bg-white relative overflow-hidden flex items-center justify-center">
+      <Preview ref={iframeRef} htmlContent={htmlContent} isDesktopView={isDesktopView} />
+    </div>
+  </div>
+);
+
 const FilesPane = ({ files, activeFile, onSelectFile }) => (<div className="bg-gray-900 flex flex-col h-full p-2"><Sidebar files={files} activeFile={activeFile} onSelectFile={onSelectFile} /></div>);
 
 const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (
@@ -57,10 +75,7 @@ function App() {
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
   const applyAIActions = async (actions) => {
-    const pendingLogs = actions.map(action => {
-      const verb = action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase();
-      return { id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${verb}ing file '${action.target}'...`};
-    });
+    const pendingLogs = actions.map(action => ({ id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase()}ing file '${action.target}'...`}));
     setAiLogs(prev => [...pendingLogs.reverse(), ...prev]);
 
     let tempActiveFile = activeFile;
@@ -80,13 +95,9 @@ function App() {
 
         setAiLogs(prevLogs => prevLogs.map(log => {
             if (log.id === logToUpdate.id) {
-                // --- GRAMMAR FIX IS HERE ---
                 let verb = action.perform.toLowerCase();
-                if (verb.endsWith('e')) {
-                    verb = verb.slice(0, -1); // "update" -> "updat", "delete" -> "delet"
-                }
-                const pastTenseVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ed"; // "updated", "deleted", "added"
-
+                if (verb.endsWith('e')) { verb = verb.slice(0, -1); }
+                const pastTenseVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ed";
                 return { ...log, status: 'complete', content: `Action: ${pastTenseVerb} file '${action.target}'.`};
             }
             return log;
