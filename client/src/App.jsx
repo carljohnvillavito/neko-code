@@ -123,51 +123,49 @@ function App() {
             body: JSON.stringify({ prompt: fullPrompt }),
         });
         
-        clearInterval(thinkingInterval); // Stop thinking now that we have a response
+        clearInterval(thinkingInterval);
 
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let buffer = '';
         let fullResponseText = '';
 
+        // Read the entire stream into a single string
         while (true) {
             const { done, value } = await reader.read();
-            if (done) { break; } // Exit loop when stream is done
-
-            buffer += decoder.decode(value, { stream: true });
+            if (done) break;
             
-            let boundary = buffer.indexOf('\n\n');
-            while(boundary !== -1) {
-                const message = buffer.substring(0, boundary);
-                buffer = buffer.substring(boundary + 2);
-                if (message.startsWith('data: ')) {
-                    const data = JSON.parse(message.substring(6));
-                    if (data.text) {
+            let chunk = decoder.decode(value, { stream: true });
+            // Extract content from SSE "data: " lines
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.substring(6));
+                    if(data.text) {
                         fullResponseText += data.text;
-                        const endToken = '<<END_OF_METHOD>>';
-                        const currentParts = fullResponseText.split(endToken);
-                        // Update the log entry with the streaming text
-                        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${currentParts[0]}` } : log));
                     }
                 }
-                boundary = buffer.indexOf('\n\n');
             }
         }
         
-        // --- FINALIZATION STEP ---
+        // Now that the stream is finished, parse the complete response
         const parsed = parseAIResponse(fullResponseText);
-        // Final update to the conversational log to ensure it's clean
+        
+        // Update the "Thinking..." log entry with the final message from the AI
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
         
-        // Pass only the actions to the action handler
-        await applyAIActions(parsed.actions);
-
+        // Now, apply the actions
+        if (parsed.actions && parsed.actions.length > 0) {
+            await applyAIActions(parsed.actions);
+        } else {
+            setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
+        }
+        
     } catch (err) {
         clearInterval(thinkingInterval);
-        setAiLogs(prev => prev.filter(log => log.id !== agentLogId)); // Clean up on error
+        setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
         console.error("Fetch streaming failed:", err);
         setError("A streaming connection error occurred.");
     } finally {
