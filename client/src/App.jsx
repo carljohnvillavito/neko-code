@@ -55,19 +55,10 @@ function App() {
   
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-  const applyAIActions = async (parsedResponse) => {
-    const { method, actions } = parsedResponse;
-
-    if (!actions || actions.length === 0) {
-      setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, { id: Date.now() + 1, type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
-      return;
-    }
-    
-    setAiLogs(prev => [{ id: Date.now(), type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
-
+  const applyAIActions = async (actions) => {
     const pendingLogs = actions.map(action => {
         let verb = action.perform.toLowerCase();
-        if (verb.endsWith('e')) { verb = verb.slice(0, -1); } // delete -> delet
+        if (verb.endsWith('e')) { verb = verb.slice(0, -1); }
         const pendingVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ing";
         return { id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${pendingVerb} file '${action.target}'...`};
     });
@@ -126,7 +117,6 @@ function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: fullPrompt }),
         });
-
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
 
@@ -140,9 +130,13 @@ function App() {
             const { done, value } = await reader.read();
             if (done) {
                 clearInterval(thinkingInterval);
-                setAiLogs(prev => prev.filter(log => log.id !== agentLogId)); // Remove the temp log
                 const parsed = parseAIResponse(fullResponseText);
-                await applyAIActions(parsed);
+                setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
+                if (parsed.actions && parsed.actions.length > 0) {
+                    await applyAIActions(parsed.actions);
+                } else {
+                    setAiLogs(prev => [{ id: Date.now() + 1, type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
+                }
                 break;
             }
 
@@ -160,6 +154,9 @@ function App() {
                     const data = JSON.parse(message.substring(6));
                     if (data.text) {
                         fullResponseText += data.text;
+                        const endToken = '<<END_OF_METHOD>>';
+                        const currentParts = fullResponseText.split(endToken);
+                        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${currentParts[0]}` } : log));
                     }
                 }
                 boundary = buffer.indexOf('\n\n');
@@ -167,7 +164,7 @@ function App() {
         }
     } catch (err) {
         clearInterval(thinkingInterval);
-        setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
+        setAiLogs(prev => prev.filter(log => log.id !== agentLogId)); // Clean up on error
         console.error("Fetch streaming failed:", err);
         setError("A streaming connection error occurred.");
     } finally {
