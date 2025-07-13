@@ -118,7 +118,7 @@ function App() {
         let finalMessage = parsed.method;
         if (finalMessage === "Neko didn't provide a message." && lastValidMessage) {
             finalMessage = lastValidMessage;
-        } else {
+        } else if (finalMessage !== "Neko didn't provide a message.") {
             setLastValidMessage(finalMessage);
         }
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${finalMessage}"` } : log));
