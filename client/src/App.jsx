@@ -122,47 +122,51 @@ function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: fullPrompt }),
         });
-        
-        clearInterval(thinkingInterval);
 
-        if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+        if (!response.ok) {
+            clearInterval(thinkingInterval);
+            setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         if (!response.body) { throw new Error("Response body is missing."); }
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullResponseText = '';
+        let firstChunkReceived = false;
 
-        // Read the entire stream into a single string
         while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
             
-            let chunk = decoder.decode(value, { stream: true });
-            // Extract content from SSE "data: " lines
+            if (done) {
+                const parsed = parseAIResponse(fullResponseText);
+                if (parsed.actions && parsed.actions.length > 0) {
+                    await applyAIActions(parsed.actions);
+                } else {
+                    setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
+                }
+                break;
+            }
+
+            if (!firstChunkReceived) {
+                firstChunkReceived = true;
+                clearInterval(thinkingInterval);
+            }
+
+            const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n');
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     const data = JSON.parse(line.substring(6));
-                    if(data.text) {
+                    if (data.text) {
                         fullResponseText += data.text;
+                        const endToken = '<<END_OF_METHOD>>';
+                        const currentParts = fullResponseText.split(endToken);
+                        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${currentParts[0]}` } : log));
                     }
                 }
             }
         }
-        
-        // Now that the stream is finished, parse the complete response
-        const parsed = parseAIResponse(fullResponseText);
-        
-        // Update the "Thinking..." log entry with the final message from the AI
-        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
-        
-        // Now, apply the actions
-        if (parsed.actions && parsed.actions.length > 0) {
-            await applyAIActions(parsed.actions);
-        } else {
-            setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
-        }
-        
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
