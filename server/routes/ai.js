@@ -30,6 +30,37 @@ ACTIONS:
 `,
 });
 
+// CORRECTED: Changed back to POST to handle large prompts in the body
+router.post('/ask-ai-stream', async (req, res) => {
+    // CORRECTED: Read prompt from the request body
+    const { prompt } = req.body;
+    if (!prompt) {
+        return res.status(400).json({ success: false, error: 'Prompt is required.' });
+    }
+
+    try {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+
+        const result = await model.generateContentStream(prompt);
+
+        for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
+        }
+        
+        res.write(`data: ${JSON.stringify({ event: 'end' })}\n\n`);
+        res.end();
+
+    } catch (error) {
+        console.error('Error during AI stream:', error);
+        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+        res.end();
+    }
+});
+
 router.post('/ask-ai', async (req, res) => {
     const { prompt } = req.body;
     if (!prompt) {
