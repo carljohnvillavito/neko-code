@@ -56,15 +56,19 @@ function App() {
 
   const applyAIActions = async (parsedResponse) => {
     const { method, actions } = parsedResponse;
+
+    const conversationalLog = { id: Date.now(), type: 'agent-purr', content: `Agent-PURR: "${method}"` };
     
-    // Handle case where AI responds but performs no actions
     if (!actions || actions.length === 0) {
-        setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: 'Agent-PURR: (No file actions were performed)' }, { id: Date.now() + 1, type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
+        setAiLogs(prev => [{ id: Date.now() + 1, type: 'agent-info', content: '(No file actions were performed.)' }, conversationalLog, ...prev]);
         return;
     }
 
-    const pendingLogs = actions.map(action => ({ id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase()}ing file '${action.target}'...`}));
-    setAiLogs(prev => [...pendingLogs.reverse(), { id: Date.now(), type: 'agent-purr', content: `Agent-PURR: "${method}"` }, ...prev]);
+    const pendingLogs = actions.map(action => {
+      const verb = action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase();
+      return { id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${verb}ing file '${action.target}'...`};
+    });
+    setAiLogs(prev => [...pendingLogs.reverse(), conversationalLog, ...prev]);
 
     let tempActiveFile = activeFile;
     for (let i = 0; i < actions.length; i++) {
@@ -74,7 +78,9 @@ function App() {
         
         setProjectFiles(currentFiles => {
             const newFiles = { ...currentFiles };
-            const upperPerform = action.perform.toUpperCase();
+            // Treat "REPLACE" as "UPDATE"
+            const upperPerform = action.perform.toUpperCase() === 'REPLACE' ? 'UPDATE' : action.perform.toUpperCase();
+            
             if (upperPerform === 'ADD') { newFiles[action.target] = action.content || ''; tempActiveFile = action.target; }
             else if (upperPerform === 'UPDATE') { newFiles[action.target] = action.content || ''; }
             else if (upperPerform === 'DELETE') { delete newFiles[action.target]; if (tempActiveFile === action.target) { const r = Object.keys(newFiles); tempActiveFile = r.length > 0 ? r[0] : null; } }
@@ -85,9 +91,11 @@ function App() {
             if (log.id === logToUpdate.id) {
                 let verb = action.perform.toLowerCase();
                 let pastTenseVerb;
-                if (verb === 'add') pastTenseVerb = 'Added';
-                else if (verb.endsWith('e')) pastTenseVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "d";
-                else pastTenseVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ed";
+                if (verb === 'add') { pastTenseVerb = 'Added'; }
+                else if (verb === 'replace' || verb === 'update') { pastTenseVerb = 'Updated'; }
+                else if (verb === 'delete') { pastTenseVerb = 'Deleted'; }
+                else { pastTenseVerb = verb.charAt(0).toUpperCase() + verb.slice(1) + "ed"; }
+                
                 return { ...log, status: 'complete', content: `Action: ${pastTenseVerb} file '${action.target}'.`};
             }
             return log;
@@ -103,15 +111,12 @@ function App() {
     setIsLoading(true); setError(null);
     const userLogId = Date.now();
     setAiLogs(prev => [{ id: userLogId, type: 'user', content: `User: "${prompt}"` }, ...prev]);
+    
     const agentLogId = userLogId + 1;
-    const initialAgentLog = { id: agentLogId, type: 'agent-purr', content: 'Agent-PURR: Thinking...' };
-    setAiLogs(prev => [initialAgentLog, ...prev]);
-
-    let thinkingInterval;
-    let dotCount = 1;
-    thinkingInterval = setInterval(() => {
-        dotCount = (dotCount % 3) + 1;
-        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: Thinking${'.'.repeat(dotCount)}` } : log));
+    setAiLogs(prev => [{ id: agentLogId, type: 'agent-purr', content: 'Agent-PURR: Thinking...' }, ...prev]);
+    
+    let thinkingInterval = setInterval(() => {
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log));
     }, 500);
 
     const fullPrompt = constructEnhancedPrompt(prompt);
@@ -122,7 +127,10 @@ function App() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: fullPrompt }),
         });
+
         clearInterval(thinkingInterval);
+        setAiLogs(prev => prev.filter(log => log.id !== agentLogId)); // Remove "Thinking..." log
+
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
 
@@ -130,9 +138,6 @@ function App() {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullResponseText = '';
-        
-        // Remove the "Thinking..." log now that we have a response
-        setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
 
         while (true) {
             const { done, value } = await reader.read();
@@ -142,10 +147,22 @@ function App() {
                 break;
             }
             buffer += decoder.decode(value, { stream: true });
-            // ... (rest of stream processing remains the same)
+            let boundary = buffer.indexOf('\n\n');
+            while(boundary !== -1) {
+                const message = buffer.substring(0, boundary);
+                buffer = buffer.substring(boundary + 2);
+                if (message.startsWith('data: ')) {
+                    const data = JSON.parse(message.substring(6));
+                    if (data.text) {
+                        fullResponseText += data.text;
+                    }
+                }
+                boundary = buffer.indexOf('\n\n');
+            }
         }
     } catch (err) {
         clearInterval(thinkingInterval);
+        setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
         console.error("Fetch streaming failed:", err);
         setError("A streaming connection error occurred.");
     } finally {
