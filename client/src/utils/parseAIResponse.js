@@ -1,29 +1,32 @@
 /**
- * Parses the structured text response from the AI.
+ * Parses the structured text response from the AI, which can contain multiple actions.
  * @param {string} text - The raw text from the AI.
- * @returns {{method: string, perform: string, target: string, content: string}}
+ * @returns {{method: string, actions: {perform: string, target: string, content: string}[]}}
  */
 export function parseAIResponse(text) {
   if (!text || typeof text !== 'string') {
-    return { method: null, perform: null, target: null, content: '' };
+    return { method: null, actions: [] };
   }
 
-  // Handle potential variations in line breaks and spacing
   const cleanedText = text.replace(/\r\n/g, '\n').trim();
 
-  const methodMatch = /METHOD:\s*([\s\S]*?)\nPERFORM:/i.exec(cleanedText);
+  // Extract the conversational method
+  const methodMatch = /METHOD:\s*([\s\S]*?)\nACTIONS:/i.exec(cleanedText);
   const method = methodMatch ? methodMatch[1].trim() : "Neko didn't provide a message.";
 
-  const performMatch = /PERFORM:\s*(ADD|UPDATE|DELETE)/i.exec(cleanedText);
-  const perform = performMatch ? performMatch[1].trim().toUpperCase() : null;
+  // Extract the JSON block content
+  const actionsMatch = /ACTIONS:\s*```json\n([\s\S]+?)\n```/i.exec(cleanedText);
+  if (!actionsMatch) {
+    return { method, actions: [] };
+  }
 
-  const targetMatch = /TARGET:\s*([^\n]+)/i.exec(cleanedText);
-  const target = targetMatch ? targetMatch[1].trim() : null;
-  
-  // Regex to capture content within ```, optionally with a language identifier
-  const contentMatch = /CONTENT:\s*```(?:\w+)?\n([\s\S]+?)```/i.exec(cleanedText);
-  // If no content block is found, it might be a DELETE operation, so content can be empty.
-  const content = contentMatch ? contentMatch[1] : '';
-
-  return { method, perform, target, content };
+  const jsonString = actionsMatch[1];
+  try {
+    // Parse the JSON string into an array of actions
+    const actions = JSON.parse(jsonString);
+    return { method, actions: Array.isArray(actions) ? actions : [] };
+  } catch (error) {
+    console.error("Failed to parse AI actions JSON:", error);
+    return { method, actions: [] }; // Return empty array on parsing error
+  }
 }
