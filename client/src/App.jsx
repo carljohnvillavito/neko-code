@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import axios from 'axios';
 import html2canvas from 'html2canvas';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
@@ -55,22 +54,63 @@ function App() {
 
   const handleFileContentChange = (newContent) => { if (newContent !== undefined) setProjectFiles(p => ({...p, [activeFile]: newContent})); };
   
-  const applyAIActions = (actions) => {
-    const actionLogs = actions.map(action => ({ id: Date.now() + Math.random(), type: 'action', status: 'pending', content: `${action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase()} file '${action.target}'...` }));
-    setAiLogs(prev => [...actionLogs.reverse(), ...prev]);
-    let finalProjectFiles = { ...projectFiles }; let finalActiveFile = activeFile;
-    for (const action of actions) {
-        const upperPerform = action.perform.toUpperCase();
-        if (upperPerform === 'ADD') { finalProjectFiles[action.target] = action.content || ''; finalActiveFile = action.target; }
-        else if (upperPerform === 'UPDATE') { finalProjectFiles[action.target] = action.content || ''; }
-        else if (upperPerform === 'DELETE') { delete finalProjectFiles[action.target]; if (finalActiveFile === action.target) { const r = Object.keys(finalProjectFiles); finalActiveFile = r.length > 0 ? r[0] : null; }}
+  const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+  const applyAIActions = async (actions) => {
+    // 1. Create unique IDs for each pending action log entry
+    const pendingLogs = actions.map(action => {
+      const verb = action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase();
+      return {
+        id: Date.now() + Math.random(),
+        type: 'action',
+        status: 'pending',
+        content: `${verb}ing file '${action.target}'...` // e.g., "Updating file 'style.css'..."
+      };
+    });
+    setAiLogs(prev => [...pendingLogs.reverse(), ...prev]);
+
+    // 2. Process each action sequentially with a delay
+    let tempActiveFile = activeFile;
+    for (let i = 0; i < actions.length; i++) {
+        await delay(1000); // Wait 1 second before processing the next action
+        
+        const action = actions[i];
+        const logToUpdate = pendingLogs[i];
+        
+        // Update the project files state based on the action
+        setProjectFiles(currentFiles => {
+            const newFiles = { ...currentFiles };
+            const upperPerform = action.perform.toUpperCase();
+            if (upperPerform === 'ADD') {
+                newFiles[action.target] = action.content || '';
+                tempActiveFile = action.target;
+            } else if (upperPerform === 'UPDATE') {
+                newFiles[action.target] = action.content || '';
+            } else if (upperPerform === 'DELETE') {
+                delete newFiles[action.target];
+                if (tempActiveFile === action.target) {
+                    const remaining = Object.keys(newFiles);
+                    tempActiveFile = remaining.length > 0 ? remaining[0] : null;
+                }
+            }
+            return newFiles;
+        });
+
+        // Update the log entry to "complete"
+        setAiLogs(prevLogs => prevLogs.map(log => {
+            if (log.id === logToUpdate.id) {
+                const verb = action.perform.charAt(0).toUpperCase() + action.perform.slice(1).toLowerCase();
+                return {
+                    ...log,
+                    status: 'complete',
+                    content: `Action: ${verb}d file '${action.target}'.` // e.g., "Action: Updated file 'style.css'."
+                };
+            }
+            return log;
+        }));
     }
-    setProjectFiles(finalProjectFiles); setActiveFile(finalActiveFile);
-    setAiLogs(prev => prev.map(log => {
-        const correspondingAction = actions.find(a => log.content.includes(a.target) && log.content.toLowerCase().includes(a.perform.toLowerCase()));
-        if (log.type === 'action' && log.status === 'pending' && correspondingAction) { return { ...log, status: 'complete', content: `Action: ${correspondingAction.perform.charAt(0).toUpperCase() + correspondingAction.perform.slice(1)}d file '${correspondingAction.target}'.` };}
-        return log;
-    }));
+    // Set the active file at the very end
+    setActiveFile(tempActiveFile);
   };
 
   const constructEnhancedPrompt = (userInput) => { let fc = "FULL PROJECT CONTEXT:\n\n"; for (const fn in projectFiles) { fc += `--- File: ${fn} ---\n${projectFiles[fn]}\n\n`; } return `${fc}USER REQUEST: "${userInput}"\n\nBased on the FULL PROJECT CONTEXT, fulfill the user's request.`; };
@@ -100,10 +140,16 @@ function App() {
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done) {
+                const parsed = parseAIResponse(fullResponseText);
+                if (parsed.actions && parsed.actions.length > 0) {
+                    await applyAIActions(parsed.actions); // Now an async call
+                }
+                break;
+            }
+
             buffer += decoder.decode(value, { stream: true });
             
-            // Process buffer line by line for SSE messages
             let boundary = buffer.indexOf('\n\n');
             while(boundary !== -1) {
                 const message = buffer.substring(0, boundary);
@@ -113,19 +159,8 @@ function App() {
                     if (data.text) {
                         fullResponseText += data.text;
                         const endToken = '<<END_OF_METHOD>>';
-                        if (fullResponseText.includes(endToken)) {
-                            const parts = fullResponseText.split(endToken);
-                            setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${parts[0]}` } : log));
-                        } else {
-                            setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${fullResponseText}` } : log));
-                        }
-                    }
-                    if(data.event === 'end') {
-                      const parsed = parseAIResponse(fullResponseText);
-                      if (parsed.actions && parsed.actions.length > 0) {
-                          applyAIActions(parsed.actions);
-                      }
-                      return; // Exit the loop and function
+                        const currentParts = fullResponseText.split(endToken);
+                        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${currentParts[0]}` } : log));
                     }
                 }
                 boundary = buffer.indexOf('\n\n');
