@@ -10,50 +10,46 @@ const model = genAI.getGenerativeModel({
 1.  First, you MUST stream your conversational response, ending it with the exact separator token: <<END_OF_METHOD>>
 2.  After the separator, you MUST provide a single, final JSON block containing an array of file operations.
 
+RULES:
+- The only valid "perform" values are "ADD", "UPDATE", and "DELETE".
+- If you are asked to create a file that already exists, use the "UPDATE" action instead of "ADD".
+- For "DELETE", the "content" can be an empty string.
+
 EXAMPLE RESPONSE:
 METHOD: Of course, purrrr. I will create those files for you, meow.<<END_OF_METHOD>>
 ACTIONS:
 \`\`\`json
 [
   {
-    "perform": "ADD",
+    "perform": "UPDATE",
     "target": "index.html",
     "content": "<!DOCTYPE html>..."
   },
   {
     "perform": "ADD",
-    "target": "style.css",
-    "content": "body { color: hotpink; }"
+    "target": "new-feature.js",
+    "content": "console.log('new feature');"
   }
 ]
 \`\`\`
 `,
 });
 
-// CORRECTED: Changed back to POST to handle large prompts in the body
 router.post('/ask-ai-stream', async (req, res) => {
-    // CORRECTED: Read prompt from the request body
     const { prompt } = req.body;
-    if (!prompt) {
-        return res.status(400).json({ success: false, error: 'Prompt is required.' });
-    }
-
+    if (!prompt) { return res.status(400).json({ success: false, error: 'Prompt is required.' }); }
     try {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         res.flushHeaders();
-
         const result = await model.generateContentStream(prompt);
-
         for await (const chunk of result.stream) {
             const chunkText = chunk.text();
             res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
         }
-        
         res.write(`data: ${JSON.stringify({ event: 'end' })}\n\n`);
         res.end();
-
     } catch (error) {
         console.error('Error during AI stream:', error);
         res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
@@ -62,35 +58,16 @@ router.post('/ask-ai-stream', async (req, res) => {
 });
 
 router.post('/ask-ai', async (req, res) => {
-    const { prompt } = req.body;
-    if (!prompt) {
-        return res.status(400).json({ success: false, error: 'Prompt is required.' });
-    }
-
-    try {
-        // Set headers for Server-Sent Events (SSE)
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.flushHeaders(); // Flush the headers to establish the connection
-
-        const result = await model.generateContentStream(prompt);
-
-        for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            // SSE format: data: [your data]\n\n
-            res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
-        }
-
-        // Send an end-of-stream signal
-        res.write(`data: ${JSON.stringify({ event: 'end' })}\n\n`);
-        res.end();
-
-    } catch (error) {
-        console.error('Error during AI stream:', error);
-        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-        res.end();
-    }
+  const { prompt } = req.body;
+  if (!prompt) { return res.status(400).json({ success: false, error: 'Prompt is required.' }); }
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = await response.text();
+    res.json({ success: true, output: text });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 export default router;
