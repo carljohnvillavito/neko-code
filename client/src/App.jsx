@@ -108,17 +108,32 @@ function App() {
         if (!response.body) { throw new Error("Response body is missing."); }
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
         let fullResponseText = '';
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            fullResponseText += decoder.decode(value, { stream: true }).replace(/data: /g, '').trim();
+            buffer += decoder.decode(value, { stream: true });
+            let boundary = buffer.indexOf('\n\n');
+            while (boundary !== -1) {
+                const message = buffer.substring(0, boundary);
+                buffer = buffer.substring(boundary + 2);
+                if (message.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(message.substring(6));
+                        if (data.text) {
+                            fullResponseText += data.text;
+                        }
+                    } catch (e) { /* Ignore incomplete JSON chunks */ }
+                }
+                boundary = buffer.indexOf('\n\n');
+            }
         }
         const parsed = parseAIResponse(fullResponseText);
         let finalMessage = parsed.method;
         if (finalMessage === "Neko didn't provide a message." && lastValidMessage) {
             finalMessage = lastValidMessage;
-        } else if (finalMessage !== "Neko didn't provide a message.") {
+        } else if (finalMessage && finalMessage !== "Neko didn't provide a message.") {
             setLastValidMessage(finalMessage);
         }
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${finalMessage}"` } : log));
