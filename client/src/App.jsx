@@ -8,8 +8,9 @@ import { BottomNavbar } from './components/BottomNavbar';
 import { parseAIResponse } from './utils/parseAIResponse';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban } from 'lucide-react';
 
-const API_HOST = import.meta.env.VITE_API_HOST;
-const API_URL = API_HOST ? `https://${API_HOST}` : 'https://tinidor-code-api.onrender.com';
+// REMOVED: No need to construct the API URL. We will use a relative path.
+// const API_HOST = import.meta.env.VITE_API_HOST;
+// const API_URL = API_HOST ? `https://${API_HOST}` : '...';
 
 const initialFiles = {
   'index.html': `<!DOCTYPE html>
@@ -143,7 +144,6 @@ function App() {
         return;
     }
 
-    // --- 1. Calculate all state changes ---
     let actionLog = '';
     const conversationalLog = `Agent-PURR: "${method}"`;
     const newProjectFiles = { ...projectFiles };
@@ -168,7 +168,6 @@ function App() {
         return;
     }
 
-    // --- 2. Apply all state changes at once ---
     setProjectFiles(newProjectFiles);
     setActiveFile(newActiveFile);
     setAiLogs(prev => [actionLog, conversationalLog, ...prev]);
@@ -195,7 +194,8 @@ Based on the user request, analyze the project structure and the active file, th
     setAiLogs(prev => [`User: "${prompt}"`, ...prev]);
     const fullPrompt = constructPrompt(prompt);
     try {
-      const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
+      // Use a relative path. Render's proxy will handle routing this to the backend.
+      const response = await axios.post(`/api/ask-ai`, { prompt: fullPrompt });
       const aiOutput = response.data.output;
       const parsedAction = parseAIResponse(aiOutput);
       applyAIAction(parsedAction);
