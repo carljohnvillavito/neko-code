@@ -56,6 +56,11 @@ function App() {
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
   const applyAIActions = async (actions) => {
+    if (!actions || actions.length === 0) {
+        setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
+        return;
+    }
+
     const pendingLogs = actions.map(action => {
         let verb = action.perform.toLowerCase();
         if (verb.endsWith('e')) { verb = verb.slice(0, -1); }
@@ -118,6 +123,8 @@ function App() {
             body: JSON.stringify({ prompt: fullPrompt }),
         });
         
+        clearInterval(thinkingInterval); // Stop thinking now that we have a response
+
         if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
         if (!response.body) { throw new Error("Response body is missing."); }
 
@@ -125,28 +132,13 @@ function App() {
         const decoder = new TextDecoder();
         let buffer = '';
         let fullResponseText = '';
-        let firstChunkReceived = false;
 
         while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-                clearInterval(thinkingInterval);
-                const parsed = parseAIResponse(fullResponseText);
-                setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
-                if (parsed.actions && parsed.actions.length > 0) {
-                    await applyAIActions(parsed.actions);
-                } else {
-                    setAiLogs(prev => [{ id: Date.now() + 1, type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
-                }
-                break;
-            }
-
-            if (!firstChunkReceived) {
-                firstChunkReceived = true;
-                clearInterval(thinkingInterval);
-            }
+            if (done) { break; } // Exit loop when stream is done
 
             buffer += decoder.decode(value, { stream: true });
+            
             let boundary = buffer.indexOf('\n\n');
             while(boundary !== -1) {
                 const message = buffer.substring(0, boundary);
@@ -157,12 +149,22 @@ function App() {
                         fullResponseText += data.text;
                         const endToken = '<<END_OF_METHOD>>';
                         const currentParts = fullResponseText.split(endToken);
+                        // Update the log entry with the streaming text
                         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${currentParts[0]}` } : log));
                     }
                 }
                 boundary = buffer.indexOf('\n\n');
             }
         }
+        
+        // --- FINALIZATION STEP ---
+        const parsed = parseAIResponse(fullResponseText);
+        // Final update to the conversational log to ensure it's clean
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
+        
+        // Pass only the actions to the action handler
+        await applyAIActions(parsed.actions);
+
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId)); // Clean up on error
