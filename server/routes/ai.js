@@ -5,7 +5,7 @@ const router = express.Router();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-pro-latest",
+    model: "gemini-2.5-pro",
     systemInstruction: `You are a world-class web development AI agent named Neko. You MUST respond in a single, valid JSON array of action objects.
 
 **CRITICAL RULES:**
