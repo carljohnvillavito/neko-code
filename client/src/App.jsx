@@ -36,16 +36,7 @@ const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (<div className="h-ful
             return <p key={log.id} className={`text-sm ${style}`}>{icon}{log.content}</p>
         })}
     </div><div className="flex-shrink-0"><Chatbox onAskAI={onAskAI} isLoading={isLoading} /></div></div>);
-
-const DownloadModal = ({ onDownload, onClose }) => {
-    const [filename, setFilename] = useState('neko-project');
-    const handleDownload = () => {
-        const sanitized = filename.replace(/\s+/g, '_') || 'neko-project';
-        onDownload(sanitized);
-        onClose();
-    };
-    return (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm"><h3 className="text-lg font-bold mb-4">Download Project</h3><p className="text-sm text-gray-400 mb-2">Enter a filename for your .zip file.</p><input type="text" value={filename} onChange={(e) => setFilename(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 mb-4 text-white focus:outline-none focus:ring-2 focus:ring-pink-500" /><div className="flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-sm">Cancel</button><button onClick={handleDownload} className="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-md text-sm font-bold">Download</button></div><button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-white"><X size={20} /></button></div></div>);
-};
+const DownloadModal = ({ onDownload, onClose }) => { const [filename, setFilename] = useState('neko-project'); const handleDownload = () => { const sanitized = filename.replace(/\s+/g, '_') || 'neko-project'; onDownload(sanitized); onClose(); }; return (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm"><h3 className="text-lg font-bold mb-4">Download Project</h3><p className="text-sm text-gray-400 mb-2">Enter a filename for your .zip file.</p><input type="text" value={filename} onChange={(e) => setFilename(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 mb-4 text-white focus:outline-none focus:ring-2 focus:ring-pink-500" /><div className="flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-sm">Cancel</button><button onClick={handleDownload} className="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-md text-sm font-bold">Download</button></div><button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-white"><X size={20} /></button></div></div>); };
 
 // --- MAIN APP COMPONENT ---
 function App() {
@@ -119,11 +110,9 @@ function App() {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullResponseText = '';
-        let firstChunkReceived = false;
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            if (!firstChunkReceived) { firstChunkReceived = true; }
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n\n');
             for (const line of lines) {
@@ -142,7 +131,7 @@ function App() {
         }
         const parsed = parseAIResponse(fullResponseText);
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
-        await delay(1000); // Wait 1 second after message is displayed
+        await delay(1000);
         await applyAIActions(parsed.actions);
     } catch (err) {
         clearInterval(thinkingInterval);
@@ -156,9 +145,7 @@ function App() {
 
   const handleDownloadProject = async (filename) => {
     const zip = new JSZip();
-    Object.keys(projectFiles).forEach(name => {
-        zip.file(name, projectFiles[name]);
-    });
+    Object.keys(projectFiles).forEach(name => { zip.file(name, projectFiles[name]); });
     const content = await zip.generateAsync({ type: "blob" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(content);
