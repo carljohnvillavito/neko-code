@@ -44,24 +44,38 @@ const model = genAI.getGenerativeModel({
 `,
 });
 
-// The single, reliable endpoint for all AI requests
+router.post('/ask-ai-stream', async (req, res) => {
+    const { prompt } = req.body;
+    if (!prompt) { return res.status(400).json({ success: false, error: 'Prompt is required.' }); }
+    try {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+        const result = await model.generateContentStream(prompt);
+        for await (const chunk of result.stream) {
+            const chunkText = chunk.text();
+            res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
+        }
+        res.write(`data: ${JSON.stringify({ event: 'end' })}\n\n`);
+        res.end();
+    } catch (error) {
+        console.error('Error during AI stream:', error);
+        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+        res.end();
+    }
+});
+
 router.post('/ask-ai', async (req, res) => {
   const { prompt } = req.body;
-  if (!prompt) {
-    return res.status(400).json({ success: false, error: 'Prompt is required.' });
-  }
+  if (!prompt) { return res.status(400).json({ success: false, error: 'Prompt is required.' }); }
   try {
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const text = response.text();
-    
-    // Clean the response to ensure it's valid JSON
-    const cleanedText = text.replace(/^```json\n/, '').replace(/\n```$/, '');
-    
-    res.json({ success: true, output: cleanedText });
-  } catch (error) {
-    console.error('Error calling Gemini API:', error);
-    res.status(500).json({ success: false, error: 'Failed to get response from AI. ' + error.message });
+    const text = await response.text();
+    res.json({ success: true, output: text });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
