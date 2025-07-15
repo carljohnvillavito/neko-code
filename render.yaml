@@ -1,7 +1,7 @@
 services:
   # The Backend (Node.js Web Service)
   - type: web
-    name: neko-editor-backend # This name must match the 'fromService' name below
+    name: neko-code-api# This name must match the 'fromService' name below
     runtime: node
     rootDir: server
     plan: free
@@ -15,7 +15,7 @@ services:
 
   # The Frontend (React Static Site)
   - type: web
-    name: neko-editor-client
+    name: neko-code-web
     rootDir: client
     runtime: static
     buildCommand: "npm install && npm run build"
@@ -24,7 +24,7 @@ services:
       - key: VITE_API_HOST # This key is read by App.jsx
         fromService:
           type: web
-          name: neko-editor-backend # Must match the backend service name
+          name: neko-code-api # Must match the backend service name
           property: host # Provides the hostname (e.g., neko-editor-backend)
     routes:
       # This rewrite is for client-side routing, ensuring all paths load the app
