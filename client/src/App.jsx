@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import axios from 'axios'; // Re-import axios
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
 import { Preview } from './components/Preview';
@@ -55,8 +56,7 @@ function App() {
   
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-  const applyAIActions = async (actions, agentLogId, finalMessage) => {
-    setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${finalMessage}"` } : log));
+  const applyAIActions = async (actions) => {
     if (!actions || actions.length === 0) {
         setAiLogs(prev => [{ id: Date.now(), type: 'agent-info', content: '(No file actions were performed.)' }, ...prev]);
         return;
@@ -97,30 +97,31 @@ function App() {
     if (!prompt || isLoading) return;
     setIsLoading(true); setError(null);
     setAiLogs(prev => [{ id: Date.now(), type: 'user', content: `User: "${prompt}"` }, ...prev]);
+    
     const agentLogId = Date.now() + 1;
     setAiLogs(prev => [{ id: agentLogId, type: 'agent-purr', content: 'Agent-PURR: Thinking...' }, ...prev]);
-    let thinkingInterval = setInterval(() => { setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log)); }, 500);
+    
+    let thinkingInterval = setInterval(() => {
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log));
+    }, 500);
+
     const fullPrompt = constructEnhancedPrompt(prompt);
+    
     try {
-        const response = await fetch(`${API_URL}/api/ask-ai-stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt }), });
+        const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
         clearInterval(thinkingInterval);
-        if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
-        if (!response.body) { throw new Error("Response body is missing."); }
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullResponseText = '';
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            fullResponseText += decoder.decode(value, { stream: true }).replace(/data: /g, '').trim();
-        }
-        const parsed = parseAIResponse(fullResponseText);
-        await applyAIActions(parsed.actions, agentLogId, parsed.method);
+        
+        const parsed = parseAIResponse(response.data.output);
+        
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
+        
+        await applyAIActions(parsed.actions);
+
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
-        console.error("Fetch streaming failed:", err);
-        setError("A streaming connection error occurred.");
+        console.error("Request failed:", err);
+        setError(err.response?.data?.error || err.message || "An unknown error occurred.");
     } finally {
         setIsLoading(false);
     }
