@@ -104,13 +104,9 @@ function App() {
     try {
         const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
         clearInterval(thinkingInterval);
-        
         const parsed = parseAIResponse(response.data.output);
-        
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.intro}"` } : log));
-        
         await applyAIActions(parsed.actions);
-
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
@@ -141,7 +137,50 @@ function App() {
 
   const handleSelectFile = (file) => { setActiveFile(file); setMobileView('editor'); };
 
-  return (<div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-mono"><header className="bg-gray-800 border-b border-gray-700 p-2 flex items-center justify-between shadow-md z-20 flex-shrink-0"><div className="flex items-center gap-3"><Cat className="h-8 w-8 text-pink-400" /><h1 className="text-xl font-bold text-white">Neko Code Editor</h1></div><button onClick={handleResetProject} className="p-2 text-gray-400 hover:text-red-400 transition-colors" title="Reset Project"><Trash2 size={20} /></button></header><div className="hidden flex-grow md:flex md:flex-row overflow-hidden"><div className="w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2"><Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={setActiveFile} /></div><div className="flex-grow flex flex-col overflow-hidden"><div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-px bg-gray-700"><EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} /><PreviewPane htmlContent={previewContent} iframeRef={iframeRef} isDesktopView={isPreviewDesktop} onToggle={handleTogglePreviewMode} onRefresh={handleRefreshPreview} onScreenshot={handleScreenshot} /></div><div className="h-1/3 flex flex-col bg-gray-800/50 border-t border-gray-700"><AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} /></div></div></div><main className="flex-grow md:hidden relative overflow-hidden pb-16"><div className={`h-full ${mobileView === 'editor' ? 'block' : 'hidden'}`}><EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} /></div><div className={`h-full ${mobileView === 'preview' ? 'block' : 'hidden'}`}><PreviewPane htmlContent={previewContent} iframeRef={iframeRef} isDesktopView={isPreviewDesktop} onToggle={handleTogglePreviewMode} onRefresh={handleRefreshPreview} onScreenshot={handleScreenshot} /></div><div className={`h-full ${mobileView === 'files' ? 'block' : 'hidden'}`}><FilesPane files={projectFiles} activeFile={activeFile} onSelectFile={handleSelectFile} /></div><div className={`h-full ${mobileView === 'ai' ? 'block' : 'hidden'}`}><AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} /></div></main><BottomNavbar activeView={mobileView} setActiveView={setMobileView} /></div>);
+  return (
+    <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-mono">
+      <header className="bg-gray-800 border-b border-gray-700 p-2 flex items-center justify-between shadow-md z-20 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <Cat className="h-8 w-8 text-pink-400" />
+          <h1 className="text-xl font-bold text-white">Neko Code Editor</h1>
+        </div>
+        <button onClick={handleResetProject} className="p-2 text-gray-400 hover:text-red-400 transition-colors" title="Reset Project"><Trash2 size={20} /></button>
+      </header>
+      
+      <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
+        <div className="w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2">
+           <Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={setActiveFile} />
+        </div>
+        <div className="flex-grow flex flex-col overflow-hidden">
+          <div className="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-px bg-gray-700">
+            <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />
+            <PreviewPane htmlContent={previewContent} iframeRef={iframeRef} isDesktopView={isPreviewDesktop} onToggle={handleTogglePreviewMode} onRefresh={handleRefreshPreview} onScreenshot={handleScreenshot} />
+          </div>
+          <div className="h-1/3 flex flex-col bg-gray-800/50 border-t border-gray-700">
+             <AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} />
+          </div>
+        </div>
+      </div>
+      
+      {/* THE FIX IS HERE: Added padding-bottom to the main container */}
+      <main className="flex-grow md:hidden relative overflow-hidden pb-16">
+        <div className={`h-full ${mobileView === 'editor' ? 'block' : 'hidden'}`}>
+          <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />
+        </div>
+        <div className={`h-full ${mobileView === 'preview' ? 'block' : 'hidden'}`}>
+          <PreviewPane htmlContent={previewContent} iframeRef={iframeRef} isDesktopView={isPreviewDesktop} onToggle={handleTogglePreviewMode} onRefresh={handleRefreshPreview} onScreenshot={handleScreenshot} />
+        </div>
+        <div className={`h-full ${mobileView === 'files' ? 'block' : 'hidden'}`}>
+          <FilesPane files={projectFiles} activeFile={activeFile} onSelectFile={handleSelectFile} />
+        </div>
+        <div className={`h-full ${mobileView === 'ai' ? 'block' : 'hidden'}`}>
+          <AiPane error={error} aiLogs={aiLogs} onAskAI={handleAskAI} isLoading={isLoading} />
+        </div>
+      </main>
+      
+      <BottomNavbar activeView={mobileView} setActiveView={setMobileView} />
+    </div>
+  );
 }
 
 export default App;
