@@ -97,26 +97,16 @@ function App() {
     if (!prompt || isLoading) return;
     setIsLoading(true); setError(null);
     setAiLogs(prev => [{ id: Date.now(), type: 'user', content: `User: "${prompt}"` }, ...prev]);
-    
     const agentLogId = Date.now() + 1;
     setAiLogs(prev => [{ id: agentLogId, type: 'agent-purr', content: 'Agent-PURR: Thinking...' }, ...prev]);
-    
-    let thinkingInterval = setInterval(() => {
-        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log));
-    }, 500);
-
+    let thinkingInterval = setInterval(() => { setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log)); }, 500);
     const fullPrompt = constructEnhancedPrompt(prompt);
-    
     try {
         const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
         clearInterval(thinkingInterval);
-        
         const parsed = parseAIResponse(response.data.output);
-        
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
-        
         await applyAIActions(parsed.actions);
-
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
