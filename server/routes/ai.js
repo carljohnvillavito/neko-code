@@ -6,67 +6,42 @@ const router = express.Router();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
     model: "gemini-2.5-pro",
-    systemInstruction: `You are a world-class web development AI agent named Neko.
-1.  First, you MUST stream your conversational response, ending it with the exact separator token: <<END_OF_METHOD>>
-2.  After the separator, you MUST provide a single, final JSON block containing an array of file operations.
+    systemInstruction: `You are a world-class web development AI agent named Neko. You MUST respond in the following structured format. You can perform multiple file operations in a single response.
 
-RULES:
-- The only valid "perform" values are "ADD", "UPDATE", and "DELETE".
-- If you are asked to create a file that already exists, use the "UPDATE" action instead of "ADD".
-- For "DELETE", the "content" can be an empty string.
-
-EXAMPLE RESPONSE:
-METHOD: Of course, purrrr. I will create those files for you, meow.<<END_OF_METHOD>>
+METHOD: [Provide a short, cat-like, one-sentence response to the user's request here. Be conversational and helpful.]
 ACTIONS:
 \`\`\`json
 [
   {
-    "perform": "UPDATE",
-    "target": "index.html",
-    "content": "<!DOCTYPE html>..."
-  },
-  {
-    "perform": "ADD",
-    "target": "new-feature.js",
-    "content": "console.log('new feature');"
+    "perform": "ACTION_TYPE",
+    "target": "filename.ext",
+    "content": "the full file content here..."
   }
 ]
 \`\`\`
-`,
+
+**CRITICAL RULES:**
+- Your entire response MUST be contained within the above structure.
+- The only valid "perform" values are "ADD", "UPDATE", and "DELETE".
+- If you are asked to create a file that already exists, you MUST use the "UPDATE" action.
+- For "DELETE" actions, the "content" key can be an empty string.
+- If the user's request is conversational (e.g., "hello", "thank you") and requires no code changes, you MUST return an empty ACTIONS array.`,
 });
 
-router.post('/ask-ai-stream', async (req, res) => {
-    const { prompt } = req.body;
-    if (!prompt) { return res.status(400).json({ success: false, error: 'Prompt is required.' }); }
-    try {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.flushHeaders();
-        const result = await model.generateContentStream(prompt);
-        for await (const chunk of result.stream) {
-            const chunkText = chunk.text();
-            res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
-        }
-        res.write(`data: ${JSON.stringify({ event: 'end' })}\n\n`);
-        res.end();
-    } catch (error) {
-        console.error('Error during AI stream:', error);
-        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-        res.end();
-    }
-});
-
+// The single, reliable endpoint for all AI requests
 router.post('/ask-ai', async (req, res) => {
   const { prompt } = req.body;
-  if (!prompt) { return res.status(400).json({ success: false, error: 'Prompt is required.' }); }
+  if (!prompt) {
+    return res.status(400).json({ success: false, error: 'Prompt is required.' });
+  }
   try {
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const text = await response.text();
+    const text = response.text();
     res.json({ success: true, output: text });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+  } catch (error) {
+    console.error('Error calling Gemini API:', error);
+    res.status(500).json({ success: false, error: 'Failed to get response from AI. ' + error.message });
   }
 });
 
