@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import html2canvas from 'html2canvas';
+import axios from 'axios';
 import JSZip from 'jszip';
 import { Sidebar } from './components/Sidebar';
 import { Editor } from './components/Editor';
@@ -36,7 +37,7 @@ const AiPane = ({ error, aiLogs, onAskAI, isLoading }) => (<div className="h-ful
             return <p key={log.id} className={`text-sm ${style}`}>{icon}{log.content}</p>
         })}
     </div><div className="flex-shrink-0"><Chatbox onAskAI={onAskAI} isLoading={isLoading} /></div></div>);
-const DownloadModal = ({ onDownload, onClose }) => { const [filename, setFilename] = useState('neko-project'); const handleDownload = () => { const sanitized = filename.replace(/\s+/g, '_') || 'neko-project'; onDownload(sanitized); onClose(); }; return (<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"><div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm"><h3 className="text-lg font-bold mb-4">Download Project</h3><p className="text-sm text-gray-400 mb-2">Enter a filename for your .zip file.</p><input type="text" value={filename} onChange={(e) => setFilename(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 mb-4 text-white focus:outline-none focus:ring-2 focus:ring-pink-500" /><div className="flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-sm">Cancel</button><button onClick={handleDownload} className="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-md text-sm font-bold">Download</button></div><button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-white"><X size={20} /></button></div></div>); };
+const DownloadModal = ({ onDownload, onClose }) => { const [filename, setFilename] = useState('neko-project'); const handleDownload = () => { const sanitized = filename.replace(/\s+/g, '_') || 'neko-project'; onDownload(sanitized); onClose(); }; return (<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm animate-scale-in"><h3 className="text-lg font-bold mb-4">Download Project</h3><p className="text-sm text-gray-400 mb-2">Enter a filename for your .zip file.</p><input type="text" value={filename} onChange={(e) => setFilename(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 mb-4 text-white focus:outline-none focus:ring-2 focus:ring-pink-500" /><div className="flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-sm">Cancel</button><button onClick={handleDownload} className="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-md text-sm font-bold">Download</button></div><button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-white"><X size={20} /></button></div></div>); };
 
 // --- MAIN APP COMPONENT ---
 function App() {
@@ -103,41 +104,17 @@ function App() {
     let thinkingInterval = setInterval(() => { setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log)); }, 500);
     const fullPrompt = constructEnhancedPrompt(prompt);
     try {
-        const response = await fetch(`${API_URL}/api/ask-ai-stream`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt }), });
+        const response = await axios.post(`${API_URL}/api/ask-ai`, { prompt: fullPrompt });
         clearInterval(thinkingInterval);
-        if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
-        if (!response.body) { throw new Error("Response body is missing."); }
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullResponseText = '';
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n\n');
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.substring(6));
-                        if(data.text) {
-                            fullResponseText += data.text;
-                            const endToken = '<<END_OF_METHOD>>';
-                            const conversationalPart = fullResponseText.split(endToken)[0];
-                            setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: ${conversationalPart}` } : log));
-                        }
-                    } catch(e) { /* Ignore malformed JSON chunks */ }
-                }
-            }
-        }
-        const parsed = parseAIResponse(fullResponseText);
-        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.method}"` } : log));
-        await delay(1000);
+        const parsed = parseAIResponse(response.data.output);
+        setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.intro}"` } : log));
+        await delay(1000); // Wait 1 second before showing actions
         await applyAIActions(parsed.actions);
     } catch (err) {
         clearInterval(thinkingInterval);
         setAiLogs(prev => prev.filter(log => log.id !== agentLogId));
-        console.error("Fetch streaming failed:", err);
-        setError("A streaming connection error occurred.");
+        console.error("Request failed:", err);
+        setError(err.response?.data?.error || err.message || "An unknown error occurred.");
     } finally {
         setIsLoading(false);
     }
