@@ -10,10 +10,8 @@ export function parseAIResponse(text) {
       return { intro: "Neko had a problem thinking, purrlease try again.", actions: [] };
     }
     
-    // The intro is in the first object.
     const intro = actions[0]?.intro || "Neko didn't provide a message.";
     
-    // Filter out any objects that are not valid actions (like the first one if it only has an intro).
     const validActions = actions.filter(action => action.perform && action.target);
     
     return { intro, actions: validActions };
