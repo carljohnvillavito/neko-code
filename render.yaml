@@ -17,6 +17,7 @@ services:
   - type: web
     name: neko-editor-client
     rootDir: client
+    runtime: static
     buildCommand: "npm install && npm run build"
     staticPublishPath: dist
     envVars:
