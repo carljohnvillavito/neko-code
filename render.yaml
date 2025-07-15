@@ -1,7 +1,7 @@
 services:
   # The Backend (Node.js Web Service)
   - type: web
-    name: neko-code-api# This name must match the 'fromService' name below
+    name: neko-code-api # This name must match the 'fromService' name below
     runtime: node
     rootDir: server
     plan: free
