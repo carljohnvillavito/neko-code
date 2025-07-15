@@ -1,7 +1,7 @@
 services:
   # The Backend (Node.js Web Service)
   - type: web
-    name: neko-code-api # This name must match the 'fromService' name below
+    name: neko-editor-backend # This name must match the 'fromService' name below
     runtime: node
     rootDir: server
     plan: free
@@ -11,11 +11,11 @@ services:
       - key: GEMINI_API_KEY
         sync: false # Keep your API key secret and set it in the Render dashboard
       - key: NODE_VERSION
-        value: 20 # Specify a recent Node.js version
+        value: "20" # Specify a recent Node.js version
 
   # The Frontend (React Static Site)
-  - type: web
-    name: neko-code-web
+  - type: static_site
+    name: neko-editor-client
     rootDir: client
     buildCommand: "npm install && npm run build"
     staticPublishPath: dist
@@ -23,10 +23,10 @@ services:
       - key: VITE_API_HOST # This key is read by App.jsx
         fromService:
           type: web
-          name: neko-code-api # Must match the backend service name
-          property: host
+          name: neko-editor-backend # Must match the backend service name
+          property: host # Provides the hostname (e.g., neko-editor-backend)
     routes:
-      # Fallback for client-side routing
+      # This rewrite is for client-side routing, ensuring all paths load the app
       - type: rewrite
         source: /*
         destination: /index.html
