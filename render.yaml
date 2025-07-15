@@ -23,8 +23,8 @@ services:
       - key: VITE_API_HOST # This key is read by App.jsx
         fromService:
           type: web
-          name: neko-editor-backend # Must match the backend service name
-          property: host # Provides the hostname (e.g., neko-editor-backend)
+          name: neko-code-api # Must match the backend service name
+          property: host
     routes:
       # Fallback for client-side routing
       - type: rewrite
