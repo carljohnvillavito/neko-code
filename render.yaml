@@ -1,7 +1,7 @@
 services:
   # The Backend (Node.js Web Service)
   - type: web
-    name: neko-editor-backend # This name must match the 'fromService' name below
+    name: neko-code-api# This name must match the 'fromService' name below
     runtime: node
     rootDir: server
     plan: free
@@ -14,8 +14,8 @@ services:
         value: "20" # Specify a recent Node.js version
 
   # The Frontend (React Static Site)
-  - type: static_site
-    name: neko-editor-client
+  - type: web
+    name: neko-code-web
     rootDir: client
     buildCommand: "npm install && npm run build"
     staticPublishPath: dist
