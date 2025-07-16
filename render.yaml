@@ -8,8 +8,6 @@ services:
     buildCommand: "npm install"
     startCommand: "npm start"
     envVars:
-      - key: GEMINI_API_KEY
-        sync: false # Keep your API key secret and set it in the Render dashboard
       - key: NODE_VERSION
         value: "20" # Specify a recent Node.js version
 
