@@ -8,6 +8,8 @@ import { Preview } from './components/Preview';
 import { Chatbox } from './components/Chatbox';
 import { BottomNavbar } from './components/BottomNavbar';
 import { parseAIResponse } from './utils/parseAIResponse';
+import { AIPane } from './components/AIPane';
+import { SettingsModal } from './components/SettingsModal';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban, Trash2, Smartphone, Laptop, Camera, RefreshCw, LoaderCircle, CheckCircle2, Download, X } from 'lucide-react';
 
 const API_HOST = import.meta.env.VITE_API_HOST;
@@ -23,20 +25,6 @@ const initialFiles = {
 const EditorPane = ({ activeFile, fileContent, onChange }) => (<div className="bg-gray-900 flex flex-col h-full"><div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0"><Code size={18} className="text-cyan-400" /><h2 className="font-bold">Editor: {activeFile}</h2></div><div className="flex-grow overflow-hidden">{activeFile ? (<Editor activeFile={activeFile} fileContent={fileContent} onChange={onChange} />) : (<div className="p-4 text-gray-500">Select a file to start editing.</div>)}</div></div>);
 const PreviewPane = ({ htmlContent, iframeRef, isDesktopView, onToggle, onRefresh, onScreenshot, onDownload }) => (<div className="bg-gray-900 flex flex-col h-full"><div className="bg-gray-800 p-2 flex items-center justify-between border-b border-gray-700 flex-shrink-0"><div className="flex items-center gap-2"><Eye size={18} className="text-lime-400" /><h2 className="font-bold">Live Preview</h2></div><div className="flex items-center gap-2"><button onClick={onToggle} title="Toggle View" className="p-1 text-gray-400 hover:text-white transition-colors">{isDesktopView ? <Smartphone size={18} /> : <Laptop size={18} />}</button><button onClick={onScreenshot} title="Take Screenshot" className="p-1 text-gray-400 hover:text-white transition-colors"><Camera size={18} /></button><button onClick={onRefresh} title="Refresh Preview" className="p-1 text-gray-400 hover:text-white transition-colors"><RefreshCw size={18} /></button><button onClick={onDownload} title="Download Project" className="p-1 text-gray-400 hover:text-white transition-colors"><Download size={18} /></button></div></div><div className="flex-grow bg-gray-700 relative overflow-hidden"><Preview ref={iframeRef} htmlContent={htmlContent} isDesktopView={isDesktopView} /></div></div>);
 const FilesPane = ({ files, activeFile, onSelectFile }) => (<div className="bg-gray-900 flex flex-col h-full p-2"><Sidebar files={files} activeFile={activeFile} onSelectFile={onSelectFile} /></div>);
-const AiPane = ({ error, aiLogs, onAskAI, isLoading, onImageUpload, uploadedImages, onClearImage, onClearAllImages }) => (<div className="h-full flex flex-col bg-gray-900"><div className="bg-gray-800 p-2 flex items-center gap-2 border-b border-gray-700 flex-shrink-0"><BotMessageSquare size={18} className="text-pink-400"/><h2 className="font-bold">AI-Agent</h2></div>{error && (<div className="bg-red-500/20 text-red-300 p-2 flex items-center gap-2"><AlertTriangle size={16} /><span>{error}</span></div>)}<div className="flex-grow flex flex-col-reverse p-4 overflow-y-auto gap-2">
-        {aiLogs.map((log) => {
-            let style = 'text-gray-500'; let icon = null;
-            if (log.type === 'agent-purr' || log.type === 'agent-info') style = 'text-pink-400';
-            if (log.type === 'user') style = 'text-gray-400';
-            if (log.type === 'error') style = 'text-red-400';
-            if (log.type === 'action') {
-              style = 'text-cyan-400 flex items-center gap-2';
-              if (log.status === 'pending') icon = <LoaderCircle size={14} className="animate-spin" />;
-              if (log.status === 'complete') icon = <CheckCircle2 size={14} className="text-green-500" />;
-            }
-            return (<div key={log.id}><p className={`text-sm ${style}`}>{icon}{log.content}</p>{log.images && log.images.length > 0 && (<div className="mt-2 flex space-x-2 overflow-x-auto"><div className="flex space-x-2">{log.images.map((imgData, i) => (<img key={i} src={`data:image/jpeg;base64,${imgData}`} alt="Uploaded content" className="h-20 w-20 object-cover rounded-lg" />))}</div></div>)}</div>)
-        })}
-    </div><div className="flex-shrink-0"><Chatbox onAskAI={onAskAI} isLoading={isLoading} onImageUpload={onImageUpload} uploadedImages={uploadedImages} onClearImage={onClearImage} onClearAllImages={onClearAllImages} /></div></div>);
 const DownloadModal = ({ onDownload, onClose }) => { const [filename, setFilename] = useState('neko-project'); const handleDownload = () => { const sanitized = filename.replace(/\s+/g, '_') || 'neko-project'; onDownload(sanitized); onClose(); }; return (<div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in"><div className="bg-gray-800 rounded-lg p-6 w-full max-w-sm animate-scale-in"><h3 className="text-lg font-bold mb-4">Download Project</h3><p className="text-sm text-gray-400 mb-2">Enter a filename for your .zip file.</p><input type="text" value={filename} onChange={(e) => setFilename(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 mb-4 text-white focus:outline-none focus:ring-2 focus:ring-pink-500" /><div className="flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-sm">Cancel</button><button onClick={handleDownload} className="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-md text-sm font-bold">Download</button></div><button onClick={onClose} className="absolute top-3 right-3 text-gray-500 hover:text-white"><X size={20} /></button></div></div>); };
 
 // --- MAIN APP COMPONENT ---
@@ -49,7 +37,11 @@ function App() {
   const [mobileView, setMobileView] = useState('editor');
   const [isPreviewDesktop, setIsPreviewDesktop] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [uploadedImages, setUploadedImages] = useState([]);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('neko-api-key') || '');
+  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('neko-model') || 'gemini-1.5-pro-latest');
+  const [selectedTone, setSelectedTone] = useState(() => localStorage.getItem('neko-tone') || 'Creative');
   const iframeRef = useRef(null);
   
   useEffect(() => { localStorage.setItem('neko-project-files', JSON.stringify(projectFiles)); }, [projectFiles]);
@@ -57,6 +49,15 @@ function App() {
 
   const handleFileContentChange = (newContent) => { if (newContent !== undefined) setProjectFiles(p => ({...p, [activeFile]: newContent})); };
   
+  const handleSettingsSave = (settings) => {
+    setApiKey(settings.apiKey);
+    setSelectedModel(settings.model);
+    setSelectedTone(settings.tone);
+    localStorage.setItem('neko-api-key', settings.apiKey);
+    localStorage.setItem('neko-model', settings.model);
+    localStorage.setItem('neko-tone', settings.tone);
+  };
+
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
   const applyAIActions = async (actions) => {
@@ -97,6 +98,7 @@ function App() {
   const constructEnhancedPrompt = (userInput) => { let fc = "FULL PROJECT CONTEXT:\n\n"; for (const fn in projectFiles) { fc += `--- File: ${fn} ---\n${projectFiles[fn]}\n\n`; } return `${fc}USER REQUEST: "${userInput}"\n\nBased on the FULL PROJECT CONTEXT, fulfill the user's request.`; };
 
   const handleAskAI = async (prompt, images) => {
+    if (!apiKey) { setError("Please set your Gemini API key in the settings."); return; }
     if (!prompt && (!images || images.length === 0)) return;
     setIsLoading(true); setError(null);
     setAiLogs(prev => [{ id: Date.now(), type: 'user', content: `User: "${prompt}"`, images: images }, ...prev]);
@@ -105,7 +107,7 @@ function App() {
     let thinkingInterval = setInterval(() => { setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: log.content.endsWith('...') ? 'Agent-PURR: Thinking.' : log.content + '.' } : log)); }, 500);
     const fullPrompt = constructEnhancedPrompt(prompt);
     try {
-        const payload = { prompt: fullPrompt, images: images };
+        const payload = { prompt: fullPrompt, images, apiKey, model: selectedModel, tone: selectedTone };
         const response = await axios.post(`${API_URL}/api/ask-ai`, payload);
         clearInterval(thinkingInterval);
         const parsed = parseAIResponse(response.data.output);
@@ -128,15 +130,11 @@ function App() {
       const promises = Array.from(files).map(file => {
         return new Promise((resolve) => {
           const reader = new FileReader();
-          reader.onloadend = () => {
-            resolve(reader.result.replace('data:', '').replace(/^.+,/, ''));
-          };
+          reader.onloadend = () => { resolve(reader.result.replace('data:', '').replace(/^.+,/, '')); };
           reader.readAsDataURL(file);
         });
       });
-      Promise.all(promises).then(base64Strings => {
-        setUploadedImages(prev => [...prev, ...base64Strings]);
-      });
+      Promise.all(promises).then(base64Strings => { setUploadedImages(prev => [...prev, ...base64Strings]); });
     }
     e.target.value = null;
   };
@@ -145,7 +143,7 @@ function App() {
   const handleClearAllImages = () => setUploadedImages([]);
 
   const handleDownloadProject = async (filename) => { const zip = new JSZip(); Object.keys(projectFiles).forEach(name => { zip.file(name, projectFiles[name]); }); const content = await zip.generateAsync({ type: "blob" }); const link = document.createElement("a"); link.href = URL.createObjectURL(content); link.download = `${filename}.zip`; document.body.appendChild(link); link.click(); document.body.removeChild(link); };
-  const handleResetProject = () => { if (window.confirm("Are you sure? All files and chat history will be deleted.")) { localStorage.removeItem('neko-project-files'); localStorage.removeItem('neko-ai-logs'); setProjectFiles(initialFiles); setAiLogs([]); setActiveFile('index.html'); }};
+  const handleResetProject = () => { if (window.confirm("Are you sure? All files and chat history will be deleted.")) { localStorage.removeItem('neko-project-files'); localStorage.removeItem('neko-ai-logs'); localStorage.removeItem('neko-api-key'); localStorage.removeItem('neko-model'); localStorage.removeItem('neko-tone'); setProjectFiles(initialFiles); setAiLogs([]); setActiveFile('index.html'); }};
   const handleTogglePreviewMode = () => setIsPreviewDesktop(prev => !prev);
   const handleRefreshPreview = () => { if (iframeRef.current) iframeRef.current.contentWindow.location.reload(); };
   const handleScreenshot = async () => { if (!iframeRef.current) return; try { const b = iframeRef.current.contentWindow.document.body; const c = await html2canvas(b, { width: isPreviewDesktop ? 1280 : b.scrollWidth, height: isPreviewDesktop ? 720 : b.scrollHeight, windowWidth: isPreviewDesktop ? 1280 : b.scrollWidth, windowHeight: isPreviewDesktop ? 720 : b.scrollHeight }); const i = c.toDataURL('image/jpeg', 0.9); const l = document.createElement('a'); l.href = i; l.download = 'neko-screenshot.jpeg'; document.body.appendChild(l); l.click(); document.body.removeChild(l); } catch(e) { alert("Could not take screenshot."); }};
@@ -168,6 +166,7 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-mono">
       {showDownloadModal && <DownloadModal onDownload={handleDownloadProject} onClose={() => setShowDownloadModal(false)} />}
+      {showSettingsModal && <SettingsModal initialApiKey={apiKey} initialModel={selectedModel} initialTone={selectedTone} onSave={handleSettingsSave} onClose={() => setShowSettingsModal(false)} />}
       <header className="bg-gray-800 border-b border-gray-700 p-2 flex items-center justify-between shadow-md z-20 flex-shrink-0"><div className="flex items-center gap-3"><Cat className="h-8 w-8 text-pink-400" /><h1 className="text-xl font-bold text-white">Neko Code Editor</h1></div><button onClick={handleResetProject} className="p-2 text-gray-400 hover:text-red-400 transition-colors" title="Reset Project"><Trash2 size={20} /></button></header>
       <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
         <div className="w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2"><Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={setActiveFile} /></div>
@@ -176,14 +175,14 @@ function App() {
             <EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} />
             <PreviewPane htmlContent={previewContent} iframeRef={iframeRef} isDesktopView={isPreviewDesktop} onToggle={handleTogglePreviewMode} onRefresh={handleRefreshPreview} onScreenshot={handleScreenshot} onDownload={() => setShowDownloadModal(true)} />
           </div>
-          <div className="h-1/3 flex flex-col bg-gray-800/50 border-t border-gray-700"><AiPane error={error} aiLogs={aiLogs} onAskAI={(prompt, images) => handleAskAI(prompt, images)} isLoading={isLoading} onImageUpload={handleImageUpload} uploadedImages={uploadedImages} onClearImage={handleClearImage} onClearAllImages={handleClearAllImages} /></div>
+          <div className="h-1/3 flex flex-col bg-gray-800/50 border-t border-gray-700"><AIPane error={error} aiLogs={aiLogs} onAskAI={(prompt, images) => handleAskAI(prompt, images)} isLoading={isLoading} onImageUpload={handleImageUpload} uploadedImages={uploadedImages} onClearImage={handleClearImage} onClearAllImages={handleClearAllImages} onSettingsOpen={() => setShowSettingsModal(true)} /></div>
         </div>
       </div>
       <main className="flex-grow md:hidden relative overflow-hidden pb-16">
         <div className={`h-full ${mobileView === 'editor' ? 'block' : 'hidden'}`}><EditorPane activeFile={activeFile} fileContent={projectFiles[activeFile]} onChange={handleFileContentChange} /></div>
         <div className={`h-full ${mobileView === 'preview' ? 'block' : 'hidden'}`}><PreviewPane htmlContent={previewContent} iframeRef={iframeRef} isDesktopView={isPreviewDesktop} onToggle={handleTogglePreviewMode} onRefresh={handleRefreshPreview} onScreenshot={handleScreenshot} onDownload={() => setShowDownloadModal(true)} /></div>
         <div className={`h-full ${mobileView === 'files' ? 'block' : 'hidden'}`}><FilesPane files={projectFiles} activeFile={activeFile} onSelectFile={handleSelectFile} /></div>
-        <div className={`h-full ${mobileView === 'ai' ? 'block' : 'hidden'}`}><AiPane error={error} aiLogs={aiLogs} onAskAI={(prompt, images) => handleAskAI(prompt, images)} isLoading={isLoading} onImageUpload={handleImageUpload} uploadedImages={uploadedImages} onClearImage={handleClearImage} onClearAllImages={handleClearAllImages} /></div>
+        <div className={`h-full ${mobileView === 'ai' ? 'block' : 'hidden'}`}><AIPane error={error} aiLogs={aiLogs} onAskAI={(prompt, images) => handleAskAI(prompt, images)} isLoading={isLoading} onImageUpload={handleImageUpload} uploadedImages={uploadedImages} onClearImage={handleClearImage} onClearAllImages={handleClearAllImages} onSettingsOpen={() => setShowSettingsModal(true)} /></div>
       </main>
       <BottomNavbar activeView={mobileView} setActiveView={setMobileView} />
     </div>
