@@ -37,7 +37,7 @@ function App() {
   const [mobileView, setMobileView] = useState('editor');
   const [isPreviewDesktop, setIsPreviewDesktop] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('neko-api-key') || '');
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('neko-model') || 'gemini-1.5-pro-latest');
@@ -49,14 +49,19 @@ function App() {
 
   const handleFileContentChange = (newContent) => { if (newContent !== undefined) setProjectFiles(p => ({...p, [activeFile]: newContent})); };
   
-  const handleSettingsSave = (settings) => {
-    setApiKey(settings.apiKey);
-    setSelectedModel(settings.model);
-    setSelectedTone(settings.tone);
-    localStorage.setItem('neko-api-key', settings.apiKey);
-    localStorage.setItem('neko-model', settings.model);
-    localStorage.setItem('neko-tone', settings.tone);
-  };
+    const handleSettingsSave = (settings) => {
+        setApiKey(settings.apiKey);
+        setSelectedModel(settings.model);
+        setSelectedTone(settings.tone);
+        localStorage.setItem('neko-api-key', settings.apiKey);
+        localStorage.setItem('neko-model', settings.model);
+        localStorage.setItem('neko-tone', settings.tone);
+    };
+    
+    const handleClearApiKey = () => {
+        setApiKey('');
+        localStorage.removeItem('neko-api-key');
+    };
 
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
@@ -98,7 +103,7 @@ function App() {
   const constructEnhancedPrompt = (userInput) => { let fc = "FULL PROJECT CONTEXT:\n\n"; for (const fn in projectFiles) { fc += `--- File: ${fn} ---\n${projectFiles[fn]}\n\n`; } return `${fc}USER REQUEST: "${userInput}"\n\nBased on the FULL PROJECT CONTEXT, fulfill the user's request.`; };
 
   const handleAskAI = async (prompt, images) => {
-    if (!apiKey) { setError("API Key is required."); return; }
+    if (!apiKey) { setError("API Key is required. Please add it in the settings."); return; }
     if (!prompt && (!images || images.length === 0)) return;
     setIsLoading(true); setError(null);
     setAiLogs(prev => [{ id: Date.now(), type: 'user', content: `User: "${prompt}"`, images: images }, ...prev]);
@@ -166,7 +171,7 @@ function App() {
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-200 font-mono">
       {showDownloadModal && <DownloadModal onDownload={handleDownloadProject} onClose={() => setShowDownloadModal(false)} />}
-      {showSettingsModal && <SettingsModal initialApiKey={apiKey} initialModel={selectedModel} initialTone={selectedTone} onSave={handleSettingsSave} onClose={() => setShowSettingsModal(false)} />}
+      {showSettingsModal && <SettingsModal initialApiKey={apiKey} initialModel={selectedModel} initialTone={selectedTone} onSave={handleSettingsSave} onClearApiKey={handleClearApiKey} onClose={() => setShowSettingsModal(false)} />}
       <header className="bg-gray-800 border-b border-gray-700 p-2 flex items-center justify-between shadow-md z-20 flex-shrink-0"><div className="flex items-center gap-3"><Cat className="h-8 w-8 text-pink-400" /><h1 className="text-xl font-bold text-white">Neko Code Editor</h1></div><button onClick={handleResetProject} className="p-2 text-gray-400 hover:text-red-400 transition-colors" title="Reset Project"><Trash2 size={20} /></button></header>
       <div className="hidden flex-grow md:flex md:flex-row overflow-hidden">
         <div className="w-64 bg-gray-800/50 border-r border-gray-700 overflow-y-auto p-2"><Sidebar files={projectFiles} activeFile={activeFile} onSelectFile={setActiveFile} /></div>
