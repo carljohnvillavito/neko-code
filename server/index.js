@@ -14,6 +14,9 @@ app.use(cors({
 }));;
 app.use(express.json());
 
+//Image Size Limit
+app.use(express.json({ limit: '50mb' }));
+
 // Routes
 app.use('/api', aiRoutes);
 
