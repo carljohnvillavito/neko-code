@@ -98,7 +98,7 @@ function App() {
   const constructEnhancedPrompt = (userInput) => { let fc = "FULL PROJECT CONTEXT:\n\n"; for (const fn in projectFiles) { fc += `--- File: ${fn} ---\n${projectFiles[fn]}\n\n`; } return `${fc}USER REQUEST: "${userInput}"\n\nBased on the FULL PROJECT CONTEXT, fulfill the user's request.`; };
 
   const handleAskAI = async (prompt, images) => {
-    if (!apiKey) { setError("Please set your Gemini API key in the settings."); return; }
+    if (!apiKey) { setError("API Key is required."); return; }
     if (!prompt && (!images || images.length === 0)) return;
     setIsLoading(true); setError(null);
     setAiLogs(prev => [{ id: Date.now(), type: 'user', content: `User: "${prompt}"`, images: images }, ...prev]);
@@ -135,8 +135,8 @@ function App() {
         });
       });
       Promise.all(promises).then(base64Strings => { setUploadedImages(prev => [...prev, ...base64Strings]); });
+      e.target.value = null;
     }
-    e.target.value = null;
   };
 
   const handleClearImage = (indexToRemove) => setUploadedImages(prev => prev.filter((_, index) => index !== indexToRemove));
