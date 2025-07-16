@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Save, Trash2 } from 'lucide-react';
 
 export const SettingsModal = ({ initialApiKey, initialModel, initialTone, onSave, onClearApiKey, onClose }) => {
@@ -20,19 +20,16 @@ export const SettingsModal = ({ initialApiKey, initialModel, initialTone, onSave
 
     const toneOptions = ["Creative", "Decent", "Concise"];
     
-    // This function now only saves the *other* settings. API key is saved separately.
     const handleSaveSettings = () => {
         onSave({ apiKey, model, tone });
         onClose();
     };
 
-    // New function to save just the API key
     const handleSaveKey = () => {
         onSave({ apiKey, model, tone });
-        alert("API Key saved!");
+        alert("Settings saved!");
     };
     
-    // New function to clear just the API key
     const handleClearKey = () => {
         setApiKey('');
         onClearApiKey();
