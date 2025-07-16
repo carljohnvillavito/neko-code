@@ -5,7 +5,7 @@ const router = express.Router();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-pro", // Vision capabilities are built-in
+    model: "gemini-2.5-pro",
     systemInstruction: `You are a world-class web development AI agent named Neko. You have vision capabilities. You MUST respond in a single, valid JSON array of action objects.
 
 **CRITICAL RULES:**
@@ -26,11 +26,6 @@ User provides an image of a website mockup.
     "perform": "UPDATE",
     "target": "index.html",
     "content": "<!DOCTYPE html>..."
-  },
-  {
-    "perform": "UPDATE",
-    "target": "style.css",
-    "content": "/* CSS to match the mockup */"
   }
 ]
 \`\`\`
@@ -38,28 +33,35 @@ User provides an image of a website mockup.
 });
 
 router.post('/ask-ai', async (req, res) => {
-  const { prompt, image } = req.body; // Expect an optional image field
-  if (!prompt) {
-    return res.status(400).json({ success: false, error: 'Prompt is required.' });
+  const { prompt, image } = req.body;
+  if (!prompt && !image) {
+    return res.status(400).json({ success: false, error: 'Prompt or image is required.' });
   }
 
   try {
-    const contents = [{ text: prompt }];
+    // Correctly construct the multimodal payload
+    const contents = [];
 
-    // If an image is provided, add it to the contents array
+    // Add image part if it exists
     if (image) {
-      contents.unshift({
+      contents.push({
         inlineData: {
-          mimeType: 'image/jpeg', // Assuming jpeg, can be made dynamic
+          mimeType: 'image/jpeg',
           data: image,
         },
       });
+    }
+
+    // Add text part if it exists
+    if (prompt) {
+      contents.push({ text: prompt });
     }
 
     const result = await model.generateContent({ contents });
     const response = await result.response;
     const text = response.text();
     
+    // Clean the response to ensure it's valid JSON
     const cleanedText = text.replace(/^```json\n/, '').replace(/\n```$/, '');
     
     res.json({ success: true, output: cleanedText });
