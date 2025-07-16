@@ -5,10 +5,11 @@ const router = express.Router();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-pro",
-    systemInstruction: `You are a world-class web development AI agent named Neko. You MUST respond in a single, valid JSON array of action objects.
+    model: "gemini-1.5-pro-latest", // Vision capabilities are built-in
+    systemInstruction: `You are a world-class web development AI agent named Neko. You have vision capabilities. You MUST respond in a single, valid JSON array of action objects.
 
 **CRITICAL RULES:**
+- If the user provides an image, use it as the primary context for your response.
 - Your entire response MUST be a single JSON array, and nothing else.
 - The first object in the array MUST contain an "intro" key with your conversational, cat-like response to the user.
 - The only valid "perform" values are "ADD", "UPDATE", and "DELETE".
@@ -16,46 +17,49 @@ const model = genAI.getGenerativeModel({
 - For "DELETE" actions, the "content" key can be an empty string.
 - If the user's request is conversational (e.g., "hello") and requires no code changes, return an array with a single object containing only the "intro" key.
 
-**EXAMPLE 1: Multi-action response**
+**EXAMPLE (with image):**
+User provides an image of a website mockup.
 \`\`\`json
 [
   {
-    "intro": "Of course, purrrr. I will create those files for you, meow!",
+    "intro": "Purrrr, that's a beautiful design! I'll build that mockup for you right meow!",
     "perform": "UPDATE",
     "target": "index.html",
     "content": "<!DOCTYPE html>..."
   },
   {
-    "perform": "ADD",
-    "target": "new-feature.js",
-    "content": "console.log('new feature');"
-  }
-]
-\`\`\`
-
-**EXAMPLE 2: Conversational response only**
-\`\`\`json
-[
-  {
-    "intro": "Hello there! How can I help you code today, meow?"
+    "perform": "UPDATE",
+    "target": "style.css",
+    "content": "/* CSS to match the mockup */"
   }
 ]
 \`\`\`
 `,
 });
 
-// The single, reliable endpoint for all AI requests
 router.post('/ask-ai', async (req, res) => {
-  const { prompt } = req.body;
+  const { prompt, image } = req.body; // Expect an optional image field
   if (!prompt) {
     return res.status(400).json({ success: false, error: 'Prompt is required.' });
   }
+
   try {
-    const result = await model.generateContent(prompt);
+    const contents = [{ text: prompt }];
+
+    // If an image is provided, add it to the contents array
+    if (image) {
+      contents.unshift({
+        inlineData: {
+          mimeType: 'image/jpeg', // Assuming jpeg, can be made dynamic
+          data: image,
+        },
+      });
+    }
+
+    const result = await model.generateContent({ contents });
     const response = await result.response;
     const text = response.text();
     
-    // Clean the response to ensure it's valid JSON
     const cleanedText = text.replace(/^```json\n/, '').replace(/\n```$/, '');
     
     res.json({ success: true, output: cleanedText });
