@@ -9,20 +9,19 @@ const app = express();
 const port = process.env.PORT || 5001;
 
 // Middleware
-app.use(cors({
-  origin: '*'
-}));;
-app.use(express.json());
+app.use(cors());
 
-//Image Size Limit
+// THIS IS THE DEFINITIVE FIX:
+// Increase the payload size limit for the Express server to handle large Base64 image strings.
 app.use(express.json({ limit: '50mb' }));
 
-// Routes
-app.use('/api', aiRoutes);
-
+// Root endpoint for health check
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'This API is purring.' });
+  res.json({ status: 'ok', message: 'Neko API is purring.' });
 });
+
+// API Routes
+app.use('/api', aiRoutes);
 
 app.listen(port, () => {
   console.log(`🚀 Server running on http://localhost:${port}`);
