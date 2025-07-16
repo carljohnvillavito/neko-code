@@ -5,7 +5,7 @@ const router = express.Router();
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-pro",
+    model: "gemini-1.5-pro-latest",
     systemInstruction: `You are a world-class web development AI agent named Neko. You have vision capabilities. You MUST respond in a single, valid JSON array of action objects.
 
 **CRITICAL RULES:**
@@ -32,6 +32,8 @@ User provides an image of a website mockup.
 `,
 });
 
+
+// The single, reliable endpoint for all AI requests
 router.post('/ask-ai', async (req, res) => {
   const { prompt, image } = req.body;
   if (!prompt && !image) {
@@ -39,12 +41,14 @@ router.post('/ask-ai', async (req, res) => {
   }
 
   try {
-    // Correctly construct the multimodal payload
-    const contents = [];
+    // THIS IS THE DEFINITIVE FIX:
+    // The Gemini API expects the 'contents' array to contain a single object
+    // with a 'parts' array inside it for multimodal requests.
+    const parts = [];
 
     // Add image part if it exists
     if (image) {
-      contents.push({
+      parts.push({
         inlineData: {
           mimeType: 'image/jpeg',
           data: image,
@@ -54,14 +58,15 @@ router.post('/ask-ai', async (req, res) => {
 
     // Add text part if it exists
     if (prompt) {
-      contents.push({ text: prompt });
+      parts.push({ text: prompt });
     }
 
-    const result = await model.generateContent({ contents });
+    // The entire payload must be wrapped correctly.
+    const result = await model.generateContent({ contents: [{ parts }] });
+    
     const response = await result.response;
     const text = response.text();
     
-    // Clean the response to ensure it's valid JSON
     const cleanedText = text.replace(/^```json\n/, '').replace(/\n```$/, '');
     
     res.json({ success: true, output: cleanedText });
@@ -70,5 +75,6 @@ router.post('/ask-ai', async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to get response from AI. ' + error.message });
   }
 });
+
 
 export default router;
