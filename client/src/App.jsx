@@ -37,7 +37,7 @@ function App() {
   const [mobileView, setMobileView] = useState('editor');
   const [isPreviewDesktop, setIsPreviewDesktop] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
-    const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [uploadedImages, setUploadedImages] = useState([]);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('neko-api-key') || '');
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('neko-model') || 'gemini-1.5-pro-latest');
@@ -49,19 +49,19 @@ function App() {
 
   const handleFileContentChange = (newContent) => { if (newContent !== undefined) setProjectFiles(p => ({...p, [activeFile]: newContent})); };
   
-    const handleSettingsSave = (settings) => {
-        setApiKey(settings.apiKey);
-        setSelectedModel(settings.model);
-        setSelectedTone(settings.tone);
-        localStorage.setItem('neko-api-key', settings.apiKey);
-        localStorage.setItem('neko-model', settings.model);
-        localStorage.setItem('neko-tone', settings.tone);
-    };
+  const handleSettingsSave = (settings) => {
+    setApiKey(settings.apiKey);
+    setSelectedModel(settings.model);
+    setSelectedTone(settings.tone);
+    localStorage.setItem('neko-api-key', settings.apiKey);
+    localStorage.setItem('neko-model', settings.model);
+    localStorage.setItem('neko-tone', settings.tone);
+  };
     
-    const handleClearApiKey = () => {
-        setApiKey('');
-        localStorage.removeItem('neko-api-key');
-    };
+  const handleClearApiKey = () => {
+    setApiKey('');
+    localStorage.removeItem('neko-api-key');
+  };
 
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
@@ -154,7 +154,7 @@ function App() {
   const handleScreenshot = async () => { if (!iframeRef.current) return; try { const b = iframeRef.current.contentWindow.document.body; const c = await html2canvas(b, { width: isPreviewDesktop ? 1280 : b.scrollWidth, height: isPreviewDesktop ? 720 : b.scrollHeight, windowWidth: isPreviewDesktop ? 1280 : b.scrollWidth, windowHeight: isPreviewDesktop ? 720 : b.scrollHeight }); const i = c.toDataURL('image/jpeg', 0.9); const l = document.createElement('a'); l.href = i; l.download = 'neko-screenshot.jpeg'; document.body.appendChild(l); l.click(); document.body.removeChild(l); } catch(e) { alert("Could not take screenshot."); }};
   
   const previewContent = useMemo(() => {
-    let html = projectFiles['index.html'] || '<h1>No index.html file found.</h1>';
+    let html = projectFiles['index.html'] || '<h1>No index.html file found.</h1>'
     html = html.replace(/<link[^>]*?href=["'](.*?)["'][^>]*?>/g, (match, href) => {
         if (projectFiles[href] && !href.startsWith('http')) { return `<style>\n${projectFiles[href]}\n</style>`; }
         return match;
