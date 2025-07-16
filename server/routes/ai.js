@@ -3,7 +3,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const router = express.Router();
 
-// Base system instruction
 const baseSystemInstruction = `You are a world-class web development AI agent named Neko. You have vision capabilities. You MUST respond in a single, valid JSON array of action objects.
 
 **CRITICAL RULES:**
@@ -34,8 +33,10 @@ router.post('/ask-ai', async (req, res) => {
     const genAI = new GoogleGenerativeAI(apiKey);
     const fullSystemInstruction = `${baseSystemInstruction}\n\n**TONE:**\n${toneInstructions[tone] || toneInstructions['Decent']}`;
     
+    // THIS IS THE DEFINITIVE FIX:
+    // Dynamically select the model based on the user's setting from the request.
     const model = genAI.getGenerativeModel({
-        model: modelName || "gemini-1.5-pro-latest",
+        model: modelName || "gemini-2.5-pro",
         systemInstruction: fullSystemInstruction
     });
 
