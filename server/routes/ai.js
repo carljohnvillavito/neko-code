@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const router = express.Router();
 
+// NOTE: This base instruction is a placeholder. The full prompt is provided below.
 const baseSystemInstruction = `You are a world-class web development AI agent named Neko. You have vision capabilities. You MUST respond in a single, valid JSON array of action objects.
 
 **CRITICAL RULES:**
@@ -12,7 +13,34 @@ const baseSystemInstruction = `You are a world-class web development AI agent na
 - The only valid "perform" values are "ADD", "UPDATE", and "DELETE".
 - If you are asked to create a file that already exists, you MUST use the "UPDATE" action.
 - For "DELETE" actions, the "content" key can be an empty string.
-- If the user's request is conversational (e.g., "hello") and requires no code changes, return an array with a single object containing only the "intro" key.`;
+- If the user's request is conversational (e.g., "hello") and requires no code changes, return an array with a single object containing only the "intro" key.
+
+**EXAMPLE 1: Multi-action response**
+\`\`\`json
+[
+  {
+    "intro": "Of course, purrrr. I will create those files for you, meow!",
+    "perform": "UPDATE",
+    "target": "index.html",
+    "content": "<!DOCTYPE html>..."
+  },
+  {
+    "perform": "ADD",
+    "target": "new-feature.js",
+    "content": "console.log('new feature');"
+  }
+]
+\`\`\`
+
+**EXAMPLE 2: Conversational response only**
+\`\`\`json
+[
+  {
+    "intro": "Hello there! How can I help you code today, meow?"
+  }
+]
+\`\`\`
+`;
 
 const toneInstructions = {
   Creative: "Be playful, witty, and use cat-like puns (e.g., purrfect, meow, hiss). Be very conversational.",
@@ -22,19 +50,19 @@ const toneInstructions = {
 
 router.post('/ask-ai', async (req, res) => {
   const { prompt, images, apiKey, model: modelName, tone } = req.body;
-  if (!prompt && (!images || images.length === 0)) {
-    return res.status(400).json({ success: false, error: 'Prompt or image is required.' });
-  }
+  
   if (!apiKey) {
     return res.status(400).json({ success: false, error: 'API Key is required.' });
+  }
+
+  if (!prompt && (!images || images.length === 0)) {
+    return res.status(400).json({ success: false, error: 'Prompt or image is required.' });
   }
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     const fullSystemInstruction = `${baseSystemInstruction}\n\n**TONE:**\n${toneInstructions[tone] || toneInstructions['Decent']}`;
     
-    // THIS IS THE DEFINITIVE FIX:
-    // Dynamically select the model based on the user's setting from the request.
     const model = genAI.getGenerativeModel({
         model: modelName || "gemini-2.5-pro",
         systemInstruction: fullSystemInstruction
