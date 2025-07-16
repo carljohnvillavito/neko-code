@@ -20,16 +20,12 @@ export const SettingsModal = ({ initialApiKey, initialModel, initialTone, onSave
 
     const toneOptions = ["Creative", "Decent", "Concise"];
     
-    const handleSaveSettings = () => {
+    // Saves all settings and closes the modal
+    const handleSaveAndClose = () => {
         onSave({ apiKey, model, tone });
         onClose();
     };
 
-    const handleSaveKey = () => {
-        onSave({ apiKey, model, tone });
-        alert("Settings saved!");
-    };
-    
     const handleClearKey = () => {
         setApiKey('');
         onClearApiKey();
@@ -57,9 +53,6 @@ export const SettingsModal = ({ initialApiKey, initialModel, initialTone, onSave
                             <button onClick={handleClearKey} className="p-2 text-gray-400 hover:text-red-400 transition-colors" title="Clear API Key">
                                 <Trash2 size={18} />
                             </button>
-                            <button onClick={handleSaveKey} className="p-2 text-gray-400 hover:text-green-400 transition-colors" title="Save API Key">
-                                <Save size={18} />
-                            </button>
                         </div>
                     </div>
 
@@ -79,9 +72,8 @@ export const SettingsModal = ({ initialApiKey, initialModel, initialTone, onSave
                 </div>
 
                 <div className="flex justify-end gap-2 mt-6">
-                    <button onClick={onClose} className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-md text-sm">Cancel</button>
-                    <button onClick={handleSaveSettings} className="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-md text-sm font-bold flex items-center gap-2">
-                        Save & Close
+                    <button onClick={handleSaveAndClose} className="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-md text-sm font-bold flex items-center gap-2">
+                        <Save size={16}/> Save Settings
                     </button>
                 </div>
             </div>
