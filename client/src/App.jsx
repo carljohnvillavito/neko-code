@@ -12,8 +12,9 @@ import { AIPane } from './components/AIPane';
 import { SettingsModal } from './components/SettingsModal';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban, Trash2, Smartphone, Laptop, Camera, RefreshCw, LoaderCircle, CheckCircle2, Download, X } from 'lucide-react';
 
-const API_HOST = import.meta.env.VITE_API_HOST;
-const API_URL = API_HOST ? `https://${API_HOST}.onrender.com` : 'http://localhost:5001';
+// This is now a relative path. Vercel will rewrite this to the serverless function.
+// For local development, we will configure Vite to proxy this path.
+const API_URL = '/api';
 
 const initialFiles = {
   'index.html': `<!DOCTYPE html><html><head><title>AI Code Editor</title><link rel="stylesheet" href="style.css"></head><body><h1>Hello, AI!</h1><p>Ask the AI to build something for you.</p><script src="script.js"></script></body></html>`,
@@ -49,19 +50,8 @@ function App() {
 
   const handleFileContentChange = (newContent) => { if (newContent !== undefined) setProjectFiles(p => ({...p, [activeFile]: newContent})); };
   
-  const handleSettingsSave = (settings) => {
-    setApiKey(settings.apiKey);
-    setSelectedModel(settings.model);
-    setSelectedTone(settings.tone);
-    localStorage.setItem('neko-api-key', settings.apiKey);
-    localStorage.setItem('neko-model', settings.model);
-    localStorage.setItem('neko-tone', settings.tone);
-  };
-    
-  const handleClearApiKey = () => {
-    setApiKey('');
-    localStorage.removeItem('neko-api-key');
-  };
+  const handleSettingsSave = (settings) => { setApiKey(settings.apiKey); setSelectedModel(settings.model); setSelectedTone(settings.tone); localStorage.setItem('neko-api-key', settings.apiKey); localStorage.setItem('neko-model', settings.model); localStorage.setItem('neko-tone', settings.tone); };
+  const handleClearApiKey = () => { setApiKey(''); localStorage.removeItem('neko-api-key'); };
 
   const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
@@ -113,7 +103,7 @@ function App() {
     const fullPrompt = constructEnhancedPrompt(prompt);
     try {
         const payload = { prompt: fullPrompt, images, apiKey, model: selectedModel, tone: selectedTone };
-        const response = await axios.post(`${API_URL}/api/ask-ai`, payload);
+        const response = await axios.post(`${API_URL}/ask-ai`, payload);
         clearInterval(thinkingInterval);
         const parsed = parseAIResponse(response.data.output);
         setAiLogs(prev => prev.map(log => log.id === agentLogId ? { ...log, content: `Agent-PURR: "${parsed.intro}"` } : log));
@@ -132,13 +122,7 @@ function App() {
   const handleImageUpload = (e) => {
     const files = e.target.files;
     if (files) {
-      const promises = Array.from(files).map(file => {
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => { resolve(reader.result.replace('data:', '').replace(/^.+,/, '')); };
-          reader.readAsDataURL(file);
-        });
-      });
+      const promises = Array.from(files).map(file => { return new Promise((resolve) => { const reader = new FileReader(); reader.onloadend = () => { resolve(reader.result.replace('data:', '').replace(/^.+,/, '')); }; reader.readAsDataURL(file); }); });
       Promise.all(promises).then(base64Strings => { setUploadedImages(prev => [...prev, ...base64Strings]); });
       e.target.value = null;
     }
@@ -146,7 +130,6 @@ function App() {
 
   const handleClearImage = (indexToRemove) => setUploadedImages(prev => prev.filter((_, index) => index !== indexToRemove));
   const handleClearAllImages = () => setUploadedImages([]);
-
   const handleDownloadProject = async (filename) => { const zip = new JSZip(); Object.keys(projectFiles).forEach(name => { zip.file(name, projectFiles[name]); }); const content = await zip.generateAsync({ type: "blob" }); const link = document.createElement("a"); link.href = URL.createObjectURL(content); link.download = `${filename}.zip`; document.body.appendChild(link); link.click(); document.body.removeChild(link); };
   const handleResetProject = () => { if (window.confirm("Are you sure? All files and chat history will be deleted.")) { localStorage.removeItem('neko-project-files'); localStorage.removeItem('neko-ai-logs'); localStorage.removeItem('neko-api-key'); localStorage.removeItem('neko-model'); localStorage.removeItem('neko-tone'); setProjectFiles(initialFiles); setAiLogs([]); setActiveFile('index.html'); }};
   const handleTogglePreviewMode = () => setIsPreviewDesktop(prev => !prev);
@@ -154,15 +137,9 @@ function App() {
   const handleScreenshot = async () => { if (!iframeRef.current) return; try { const b = iframeRef.current.contentWindow.document.body; const c = await html2canvas(b, { width: isPreviewDesktop ? 1280 : b.scrollWidth, height: isPreviewDesktop ? 720 : b.scrollHeight, windowWidth: isPreviewDesktop ? 1280 : b.scrollWidth, windowHeight: isPreviewDesktop ? 720 : b.scrollHeight }); const i = c.toDataURL('image/jpeg', 0.9); const l = document.createElement('a'); l.href = i; l.download = 'neko-screenshot.jpeg'; document.body.appendChild(l); l.click(); document.body.removeChild(l); } catch(e) { alert("Could not take screenshot."); }};
   
   const previewContent = useMemo(() => {
-    let html = projectFiles['index.html'] || '<h1>No index.html file found.</h1>'
-    html = html.replace(/<link[^>]*?href=["'](.*?)["'][^>]*?>/g, (match, href) => {
-        if (projectFiles[href] && !href.startsWith('http')) { return `<style>\n${projectFiles[href]}\n</style>`; }
-        return match;
-    });
-    html = html.replace(/<script[^>]*?src=["'](.*?)["'][^>]*?><\/script>/g, (match, src) => {
-        if (projectFiles[src] && !src.startsWith('http')) { return `<script>\n${projectFiles[src]}\n</script>`; }
-        return match;
-    });
+    let html = projectFiles['index.html'] || '<h1>No index.html file found.</h1>';
+    html = html.replace(/<link[^>]*?href=["'](.*?)["'][^>]*?>/g, (match, href) => { if (projectFiles[href] && !href.startsWith('http')) { return `<style>\n${projectFiles[href]}\n</style>`; } return match; });
+    html = html.replace(/<script[^>]*?src=["'](.*?)["'][^>]*?><\/script>/g, (match, src) => { if (projectFiles[src] && !src.startsWith('http')) { return `<script>\n${projectFiles[src]}\n</script>`; } return match; });
     return html;
   }, [projectFiles]);
 
