@@ -12,9 +12,7 @@ import { AIPane } from './components/AIPane';
 import { SettingsModal } from './components/SettingsModal';
 import { Cat, Code, Eye, BotMessageSquare, AlertTriangle, FolderKanban, Trash2, Smartphone, Laptop, Camera, RefreshCw, LoaderCircle, CheckCircle2, Download, X } from 'lucide-react';
 
-// This is now a relative path. Vercel will rewrite this to the serverless function.
-// For local development, we will configure Vite to proxy this path.
-const API_URL = '/api';
+const API_URL = '/api'; // Use relative path for Vercel rewrites
 
 const initialFiles = {
   'index.html': `<!DOCTYPE html><html><head><title>AI Code Editor</title><link rel="stylesheet" href="style.css"></head><body><h1>Hello, AI!</h1><p>Ask the AI to build something for you.</p><script src="script.js"></script></body></html>`,
