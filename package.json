@@ -1,0 +1,14 @@
+{
+  "name": "ai-code-editor-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=client",
+    "build": "npm run build --workspace=client",
+    "start-server": "npm start --workspace=server"
+  }
+}
